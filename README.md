@@ -73,6 +73,10 @@ Run tests:
 npm test
 ```
 
+## Icon Variants
+
+Three icon sets are included. See `icons/README.md` for previews and switch instructions.
+
 ## Project Layout
 
 - `manifest.json`: Chrome extension manifest

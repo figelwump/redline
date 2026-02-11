@@ -649,7 +649,7 @@ function bootstrapRedline() {
         throw new Error(response?.error ?? "Capture failed");
       }
 
-      showToast("Successfully saved screenshot feedback.", {
+      showToast("Successfully saved feedback. Use /redline in your agent.", {
         actionLabel: "Done",
         onAction: () => {
           clearAnnotations();

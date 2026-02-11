@@ -1,5 +1,7 @@
 # Redline
 
+![Redline hero](assets/hero.png)
+
 Redline is a Chrome extension for visual UI feedback. It lets you draw boxes, add text callouts, and save an annotated screenshot to your local machine.
 
 ## What It Does

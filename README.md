@@ -8,7 +8,7 @@ Redline is a Chrome extension for visual UI feedback. It lets you draw boxes, ad
 - Draws rectangle highlights.
 - Adds text callouts anchored to points on the page.
 - Captures the visible tab with annotations.
-- Saves screenshots and metadata to `~/.redline/feedback`.
+- Works with the `/redline` command in your agent to pick up the latest screenshot from `~/.redline/feedback`, interpret it, and plan fixes.
 
 ## Requirements
 
@@ -51,9 +51,7 @@ Install behavior:
    - Clear
    - Send
 3. Press **Send** to capture the full visible tab with your annotations, so the agent gets full page context.
-4. Find output in `~/.redline/feedback`:
-   - `feedback-<timestamp>.png`
-   - `latest.json`
+4. Run the `/redline` command in your agent. This picks up the latest screenshot saved at `~/.redline/feedback` (`feedback-<timestamp>.png`), interprets it, and comes up with a plan to address the issues noted.
 
 ## Keyboard Shortcuts
 

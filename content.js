@@ -123,7 +123,7 @@ function bootstrapRedline() {
       <button type="button" class="rl-icon-button" data-action="clear" title="Clear" aria-label="Clear">
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="8" cy="8" r="5.5"></circle>
-          <path d="M6 6l4 4M10 6l-4 4"></path>
+          <path d="M6.75 6.75l2.5 2.5M9.25 6.75l-2.5 2.5"></path>
         </svg>
       </button>
       <button type="button" data-action="send">Send</button>
@@ -131,11 +131,16 @@ function bootstrapRedline() {
 
     toolbar.addEventListener("click", (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLButtonElement)) {
+      if (!(target instanceof Element)) {
         return;
       }
 
-      const { action } = target.dataset;
+      const button = target.closest("button[data-action]");
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      const { action } = button.dataset;
       if (action === "tool-rectangle") {
         setTool(TOOL_RECTANGLE);
         return;
@@ -184,21 +189,62 @@ function bootstrapRedline() {
   }
 
   function onDocumentKeyDown(event) {
-    if (event.key !== "Escape") {
-      return;
-    }
+    if (event.key === "Escape") {
+      if (state.focusedAnnotationId !== null) {
+        removeAnnotation(state.focusedAnnotationId);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
 
-    if (state.focusedAnnotationId !== null) {
-      removeAnnotation(state.focusedAnnotationId);
+      clearAnnotations();
+      teardownAnnotationMode();
       event.preventDefault();
       event.stopPropagation();
       return;
     }
 
-    clearAnnotations();
-    teardownAnnotationMode();
-    event.preventDefault();
-    event.stopPropagation();
+    if (!state.annotationMode || state.isSending) {
+      return;
+    }
+
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+
+    if (isEditableKeyboardTarget(event.target) || isEditableKeyboardTarget(document.activeElement)) {
+      return;
+    }
+
+    const normalizedKey = event.key.toLowerCase();
+
+    if (normalizedKey === "r") {
+      setTool(TOOL_RECTANGLE);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (normalizedKey === "t") {
+      setTool(TOOL_TEXT);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (normalizedKey === "x") {
+      clearAnnotations();
+      showToast("Annotations cleared");
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (event.key === "Enter" && event.shiftKey) {
+      void saveAnnotatedCapture();
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }
 
   function onOverlayWheel(event) {
@@ -320,6 +366,7 @@ function bootstrapRedline() {
     const pill = document.createElement("div");
     pill.className = "rl-text-pill";
     pill.contentEditable = "true";
+    pill.setAttribute("contenteditable", "true");
     pill.spellcheck = false;
     pill.textContent = "";
     pill.setAttribute("aria-label", "Feedback callout text");
@@ -535,6 +582,29 @@ function bootstrapRedline() {
     return parsed;
   }
 
+  function isEditableKeyboardTarget(target) {
+    let element = null;
+    if (target instanceof Element) {
+      element = target;
+    } else if (target && typeof target === "object" && "parentElement" in target) {
+      element = target.parentElement;
+    }
+
+    if (!(element instanceof Element)) {
+      return false;
+    }
+
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+      return true;
+    }
+
+    if (element instanceof HTMLElement && element.isContentEditable) {
+      return true;
+    }
+
+    return element.closest("[contenteditable]") !== null;
+  }
+
   async function saveAnnotatedCapture() {
     if (state.isSending) {
       return;
@@ -542,7 +612,6 @@ function bootstrapRedline() {
 
     state.isSending = true;
     setCaptureButtonsDisabled(true);
-    state.toolbarElement?.classList.add("rl-hidden");
 
     try {
       const response = await sendRuntimeMessage({
@@ -558,13 +627,18 @@ function bootstrapRedline() {
         throw new Error(response?.error ?? "Capture failed");
       }
 
-      showToast("Successfully sent. Use /redline in your agent to pull them in.");
+      showToast("Successfully sent. Use /redline in your agent to pull them in.", {
+        actionLabel: "Done",
+        onAction: () => {
+          clearAnnotations();
+          teardownAnnotationMode();
+        },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send capture";
       showToast(message, true);
     } finally {
       setCaptureButtonsDisabled(false);
-      state.toolbarElement?.classList.remove("rl-hidden");
       state.isSending = false;
     }
   }
@@ -593,23 +667,58 @@ function bootstrapRedline() {
     });
   }
 
-  function showToast(message, isError = false) {
+  function showToast(message, optionsOrIsError = false) {
     if (!state.toastElement) {
       return;
     }
 
+    const options =
+      typeof optionsOrIsError === "boolean" ? { isError: optionsOrIsError } : optionsOrIsError ?? {};
+    const isError = options.isError ?? false;
+    const actionLabel = typeof options.actionLabel === "string" ? options.actionLabel : null;
+    const onAction = typeof options.onAction === "function" ? options.onAction : null;
+    const hasAction = Boolean(actionLabel && onAction);
+
     positionToastUnderToolbar();
-    state.toastElement.textContent = message;
+    state.toastElement.textContent = "";
+    const messageElement = document.createElement("span");
+    messageElement.className = "rl-toast-message";
+    messageElement.textContent = message;
+    state.toastElement.appendChild(messageElement);
+
+    if (hasAction) {
+      const actionButton = document.createElement("button");
+      actionButton.type = "button";
+      actionButton.className = "rl-toast-action";
+      actionButton.textContent = actionLabel;
+      actionButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        hideToast();
+        onAction();
+      });
+      state.toastElement.appendChild(actionButton);
+    }
+
     state.toastElement.classList.toggle("rl-error", isError);
+    state.toastElement.classList.toggle("rl-has-action", hasAction);
     state.toastElement.classList.add("rl-visible");
 
     window.clearTimeout(showToast.timeoutId);
-    showToast.timeoutId = window.setTimeout(() => {
-      state.toastElement?.classList.remove("rl-visible", "rl-error");
-    }, 2600);
+    showToast.timeoutId = 0;
+
+    if (!hasAction) {
+      showToast.timeoutId = window.setTimeout(() => {
+        hideToast();
+      }, 2600);
+    }
   }
 
   showToast.timeoutId = 0;
+
+  function hideToast() {
+    state.toastElement?.classList.remove("rl-visible", "rl-error", "rl-has-action");
+  }
 
   function positionToastUnderToolbar() {
     if (!state.toolbarElement || !state.toastElement) {

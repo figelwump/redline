@@ -42,6 +42,9 @@ function setupContentHarness(options = {}) {
     document: global.document,
     Node: global.Node,
     Element: global.Element,
+    HTMLInputElement: global.HTMLInputElement,
+    HTMLTextAreaElement: global.HTMLTextAreaElement,
+    HTMLSelectElement: global.HTMLSelectElement,
     navigator: global.navigator,
     HTMLElement: global.HTMLElement,
     HTMLButtonElement: global.HTMLButtonElement,
@@ -54,6 +57,9 @@ function setupContentHarness(options = {}) {
   global.document = window.document;
   global.Node = window.Node;
   global.Element = window.Element;
+  global.HTMLInputElement = window.HTMLInputElement;
+  global.HTMLTextAreaElement = window.HTMLTextAreaElement;
+  global.HTMLSelectElement = window.HTMLSelectElement;
   global.navigator = window.navigator;
   global.HTMLElement = window.HTMLElement;
   global.HTMLButtonElement = window.HTMLButtonElement;
@@ -101,6 +107,24 @@ function setupContentHarness(options = {}) {
         delete global.Element;
       } else {
         global.Element = previousGlobals.Element;
+      }
+
+      if (previousGlobals.HTMLInputElement === undefined) {
+        delete global.HTMLInputElement;
+      } else {
+        global.HTMLInputElement = previousGlobals.HTMLInputElement;
+      }
+
+      if (previousGlobals.HTMLTextAreaElement === undefined) {
+        delete global.HTMLTextAreaElement;
+      } else {
+        global.HTMLTextAreaElement = previousGlobals.HTMLTextAreaElement;
+      }
+
+      if (previousGlobals.HTMLSelectElement === undefined) {
+        delete global.HTMLSelectElement;
+      } else {
+        global.HTMLSelectElement = previousGlobals.HTMLSelectElement;
       }
 
       if (previousGlobals.navigator === undefined) {
@@ -155,6 +179,16 @@ function dispatchMouse(target, window, type, x, y, extra = {}) {
       bubbles: true,
       clientX: x,
       clientY: y,
+      ...extra,
+    })
+  );
+}
+
+function dispatchKey(target, window, key, extra = {}) {
+  target.dispatchEvent(
+    new window.KeyboardEvent("keydown", {
+      bubbles: true,
+      key,
       ...extra,
     })
   );
@@ -238,7 +272,25 @@ test("text tool creates dot/connector/pill and commits on Enter", async () => {
   }
 });
 
-test("send action shows success toast under toolbar and keeps UI active", async () => {
+test("clicking inside icon SVG switches tool state", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+
+    const textButton = harness.document.querySelector("button[data-action='tool-text']");
+    assert.ok(textButton);
+    const iconPath = textButton.querySelector("svg path");
+    assert.ok(iconPath);
+
+    iconPath.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+    assert.equal(textButton.classList.contains("rl-active"), true);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("send action shows success toast with done button that clears and hides UI", async () => {
   const pending = [];
   const harness = setupContentHarness({
     onSendMessage(message, callback) {
@@ -259,7 +311,7 @@ test("send action shows success toast under toolbar and keeps UI active", async 
     assert.ok(toast);
 
     sendButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
-    assert.equal(toolbar.classList.contains("rl-hidden"), true);
+    assert.equal(toolbar.classList.contains("rl-hidden"), false);
     assert.equal(sendButton.disabled, true);
     assert.equal(pending.length, 1);
     assert.equal(pending[0].message.type, "redline:capture");
@@ -277,9 +329,13 @@ test("send action shows success toast under toolbar and keeps UI active", async 
     assert.equal(toast.classList.contains("rl-visible"), true);
     assert.notEqual(toast.style.top, "");
     assert.notEqual(toast.style.left, "");
+    const doneButton = toast.querySelector(".rl-toast-action");
+    assert.ok(doneButton);
+    assert.equal(doneButton.textContent, "Done");
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.ok(harness.document.querySelector("#rl-root"));
+    doneButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(harness.document.querySelector("#rl-root"), null);
   } finally {
     harness.cleanup();
   }
@@ -292,6 +348,90 @@ test("save-tab control is hidden from toolbar", async () => {
 
     const saveTabButton = harness.document.querySelector("button[data-action='save-tab']");
     assert.equal(saveTabButton, null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("keyboard shortcuts switch tools and send", async () => {
+  const pending = [];
+  const harness = setupContentHarness({
+    onSendMessage(message, callback) {
+      pending.push({ message, callback });
+    },
+  });
+
+  try {
+    await harness.toggleAnnotation();
+
+    const rectangleButton = harness.document.querySelector("button[data-action='tool-rectangle']");
+    const textButton = harness.document.querySelector("button[data-action='tool-text']");
+    assert.ok(rectangleButton);
+    assert.ok(textButton);
+
+    dispatchKey(harness.document, harness.window, "t");
+    assert.equal(textButton.classList.contains("rl-active"), true);
+
+    dispatchKey(harness.document, harness.window, "r");
+    assert.equal(rectangleButton.classList.contains("rl-active"), true);
+
+    dispatchKey(harness.document, harness.window, "Enter", { shiftKey: true });
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].message.type, "redline:capture");
+    assert.equal(pending[0].message.metadata.captureMode, "annotated");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("keyboard clear shortcut clears annotations", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 1);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    pill.textContent = "note";
+    pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+    const rectangleButton = harness.document.querySelector("button[data-action='tool-rectangle']");
+    assert.ok(rectangleButton);
+    rectangleButton.focus();
+
+    dispatchKey(rectangleButton, harness.window, "x");
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 0);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 0);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("shortcuts are ignored while editing text pill", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+    const textButton = harness.document.querySelector("button[data-action='tool-text']");
+    assert.ok(textButton);
+    textButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+    dispatchMouse(overlay, harness.window, "click", 80, 60);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    assert.equal(pill.contentEditable, "true");
+
+    dispatchKey(pill, harness.window, "x");
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 1);
   } finally {
     harness.cleanup();
   }

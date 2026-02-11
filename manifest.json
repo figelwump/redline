@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Redline",
+  "description": "Annotate pages with rectangles and text callouts, then send a screenshot to Claude feedback.",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "scripting", "nativeMessaging"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Toggle Redline Annotation"
+  }
+}

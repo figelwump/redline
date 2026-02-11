@@ -31,11 +31,16 @@ Redline is a Chrome extension for visual UI feedback. It lets you draw boxes, ad
 ./install.sh --extension-id <your_extension_id>
 ```
 
-Optional: install the Codex skill helper file too.
+Optional: install the Redline command prompt file.
 
 ```bash
-./install.sh --extension-id <your_extension_id> --install-skill
+./install.sh --extension-id <your_extension_id> --install-command claude
+./install.sh --extension-id <your_extension_id> --install-command codex
 ```
+
+Defaults:
+- Claude command installs to `~/.claude/commands/redline.md`
+- Codex prompt installs to `~/.codex/prompts/redline.md`
 
 ## Usage
 
@@ -86,4 +91,5 @@ Three icon sets are included. See `icons/README.md` for previews and switch inst
 - `native-messaging/host.js`: native messaging entry point
 - `native-messaging/lib.js`: native messaging and file-writing helpers
 - `install.sh`: native host installer
+- `commands/redline.md`: optional command prompt template for assistant workflows
 - `test/`: unit and behavior tests

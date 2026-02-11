@@ -10,8 +10,8 @@ Usage:
 Options:
   --native-host-dir <path>  Override Chrome native host manifest directory.
   --feedback-dir <path>     Override feedback output directory. Default: ~/.redline/feedback
-  --install-skill           Install optional Codex skill file.
-  --skills-dir <path>       Override skill install directory. Default: ~/.codex/skills
+  --install-command <target>  Install optional command prompt (target: claude|codex).
+  --commands-dir <path>       Override command install directory for --install-command.
   -h, --help                Show this help text.
 EOF
 }
@@ -19,8 +19,8 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTENSION_ID=""
 FEEDBACK_DIR="$HOME/.redline/feedback"
-SKILLS_DIR="$HOME/.codex/skills"
-INSTALL_SKILL=false
+INSTALL_COMMAND_TARGET=""
+COMMANDS_DIR=""
 
 case "${OSTYPE:-}" in
   darwin*)
@@ -50,12 +50,12 @@ while [[ $# -gt 0 ]]; do
       FEEDBACK_DIR="${2:-}"
       shift 2
       ;;
-    --install-skill)
-      INSTALL_SKILL=true
-      shift
+    --install-command)
+      INSTALL_COMMAND_TARGET="${2:-}"
+      shift 2
       ;;
-    --skills-dir)
-      SKILLS_DIR="${2:-}"
+    --commands-dir)
+      COMMANDS_DIR="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -82,12 +82,26 @@ if [[ ! "$EXTENSION_ID" =~ ^[a-p]{32}$ ]]; then
   exit 1
 fi
 
+if [[ -n "$INSTALL_COMMAND_TARGET" && "$INSTALL_COMMAND_TARGET" != "claude" && "$INSTALL_COMMAND_TARGET" != "codex" ]]; then
+  echo "Unsupported command target: $INSTALL_COMMAND_TARGET" >&2
+  echo "Expected --install-command claude or --install-command codex." >&2
+  exit 1
+fi
+
+if [[ -n "$INSTALL_COMMAND_TARGET" && -z "$COMMANDS_DIR" ]]; then
+  if [[ "$INSTALL_COMMAND_TARGET" == "claude" ]]; then
+    COMMANDS_DIR="$HOME/.claude/commands"
+  else
+    COMMANDS_DIR="$HOME/.codex/prompts"
+  fi
+fi
+
 HOST_SCRIPT_PATH="$SCRIPT_DIR/native-messaging/host.js"
 HOST_LAUNCHER_PATH="$SCRIPT_DIR/native-messaging/host-launcher.sh"
 HOST_TEMPLATE_PATH="$SCRIPT_DIR/native-messaging/com.redline.feedback.json"
 HOST_MANIFEST_PATH="$NATIVE_HOST_DIR/com.redline.feedback.json"
-SKILL_SOURCE_PATH="$SCRIPT_DIR/skills/feedback.md"
-SKILL_TARGET_PATH="$SKILLS_DIR/feedback.md"
+COMMAND_SOURCE_PATH="$SCRIPT_DIR/commands/redline.md"
+COMMAND_TARGET_PATH="$COMMANDS_DIR/redline.md"
 NODE_BIN_PATH="$(command -v node || true)"
 
 if [[ ! -f "$HOST_TEMPLATE_PATH" ]]; then
@@ -105,17 +119,17 @@ if [[ -z "$NODE_BIN_PATH" ]]; then
   exit 1
 fi
 
-if [[ "$INSTALL_SKILL" == "true" && ! -f "$SKILL_SOURCE_PATH" ]]; then
-  echo "Missing skill template: $SKILL_SOURCE_PATH" >&2
+if [[ -n "$INSTALL_COMMAND_TARGET" && ! -f "$COMMAND_SOURCE_PATH" ]]; then
+  echo "Missing command template: $COMMAND_SOURCE_PATH" >&2
   exit 1
 fi
 
 mkdir -p "$NATIVE_HOST_DIR" "$FEEDBACK_DIR"
 chmod 700 "$FEEDBACK_DIR"
 
-if [[ "$INSTALL_SKILL" == "true" ]]; then
-  mkdir -p "$SKILLS_DIR"
-  chmod 700 "$SKILLS_DIR"
+if [[ -n "$INSTALL_COMMAND_TARGET" ]]; then
+  mkdir -p "$COMMANDS_DIR"
+  chmod 700 "$COMMANDS_DIR"
 fi
 
 chmod +x "$HOST_SCRIPT_PATH"
@@ -137,8 +151,8 @@ manifest.allowed_origins = [`chrome-extension://${extensionId}/`];
 fs.writeFileSync(targetPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 NODE
 
-if [[ "$INSTALL_SKILL" == "true" ]]; then
-  cp "$SKILL_SOURCE_PATH" "$SKILL_TARGET_PATH"
+if [[ -n "$INSTALL_COMMAND_TARGET" ]]; then
+  cp "$COMMAND_SOURCE_PATH" "$COMMAND_TARGET_PATH"
 fi
 
 if [[ ! -f "$HOST_MANIFEST_PATH" ]]; then
@@ -146,8 +160,8 @@ if [[ ! -f "$HOST_MANIFEST_PATH" ]]; then
   exit 1
 fi
 
-if [[ "$INSTALL_SKILL" == "true" && ! -f "$SKILL_TARGET_PATH" ]]; then
-  echo "Failed to install skill file at $SKILL_TARGET_PATH" >&2
+if [[ -n "$INSTALL_COMMAND_TARGET" && ! -f "$COMMAND_TARGET_PATH" ]]; then
+  echo "Failed to install command file at $COMMAND_TARGET_PATH" >&2
   exit 1
 fi
 
@@ -173,8 +187,8 @@ Configured native host manifest:
 Feedback directory:
   $FEEDBACK_DIR
 
-Installed skill:
-  $(if [[ "$INSTALL_SKILL" == "true" ]]; then printf '%s' "$SKILL_TARGET_PATH"; else printf '%s' "(skipped)"; fi)
+Installed command:
+  $(if [[ -n "$INSTALL_COMMAND_TARGET" ]]; then printf '%s (%s)' "$COMMAND_TARGET_PATH" "$INSTALL_COMMAND_TARGET"; else printf '%s' "(skipped)"; fi)
 
 Next:
   1. Load this directory as an unpacked extension in chrome://extensions

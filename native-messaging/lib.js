@@ -34,7 +34,16 @@ function formatTimestamp(timestamp) {
 }
 
 function buildFeedbackPath(feedbackDir, timestamp) {
-  return path.join(feedbackDir, `feedback-${formatTimestamp(timestamp)}.png`);
+  const fileStem = `feedback-${formatTimestamp(timestamp)}`;
+  let candidatePath = path.join(feedbackDir, `${fileStem}.png`);
+  let suffix = 1;
+
+  while (fs.existsSync(candidatePath)) {
+    candidatePath = path.join(feedbackDir, `${fileStem}-${suffix}.png`);
+    suffix += 1;
+  }
+
+  return candidatePath;
 }
 
 function ensureDirectory(feedbackDir) {
@@ -44,12 +53,29 @@ function ensureDirectory(feedbackDir) {
 function writeLatestJson(latestPath, payload) {
   const tempPath = `${latestPath}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), "utf8");
-  fs.renameSync(tempPath, latestPath);
+
+  try {
+    fs.renameSync(tempPath, latestPath);
+  } catch (error) {
+    try {
+      fs.unlinkSync(tempPath);
+    } catch (_unlinkError) {
+      // Best-effort cleanup.
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown filesystem error while writing latest.json";
+    throw new Error(`Failed to write latest metadata: ${errorMessage}`);
+  }
 }
 
 function saveFeedbackMessage(message, options = {}) {
   if (message?.action !== "save") {
     throw new Error("Unsupported action. Expected action='save'.");
+  }
+
+  if (typeof message.dataUrl !== "string" || message.dataUrl.length === 0) {
+    throw new Error("Message must include a non-empty PNG dataUrl string.");
   }
 
   const feedbackDir = options.feedbackDir ?? process.env.REDLINE_FEEDBACK_DIR ?? defaultFeedbackDirectory();

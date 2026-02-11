@@ -10,6 +10,10 @@ function safeErrorMessage(error) {
   return error instanceof Error ? error.message : "Unexpected native host error";
 }
 
+function logHostError(error) {
+  process.stderr.write(`[redline-host] ${safeErrorMessage(error)}\n`);
+}
+
 let bufferedInput = Buffer.alloc(0);
 
 process.stdin.on("data", (chunk) => {
@@ -19,6 +23,7 @@ process.stdin.on("data", (chunk) => {
   try {
     decoded = decodeNativeMessages(bufferedInput);
   } catch (error) {
+    logHostError(error);
     writeNativeResponse({
       success: false,
       error: safeErrorMessage(error),
@@ -34,14 +39,11 @@ process.stdin.on("data", (chunk) => {
       const result = saveFeedbackMessage(message);
       writeNativeResponse(result);
     } catch (error) {
+      logHostError(error);
       writeNativeResponse({
         success: false,
         error: safeErrorMessage(error),
       });
     }
   });
-});
-
-process.stdin.on("end", () => {
-  process.exit(0);
 });

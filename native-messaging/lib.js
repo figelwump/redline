@@ -5,7 +5,7 @@ const path = require("node:path");
 const MAX_NATIVE_MESSAGE_BYTES = 10 * 1024 * 1024;
 
 function defaultFeedbackDirectory() {
-  return path.join(os.homedir(), ".claude", "feedback");
+  return path.join(os.homedir(), ".redline", "feedback");
 }
 
 function parsePngDataUrl(dataUrl) {

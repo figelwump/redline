@@ -362,7 +362,7 @@ test("toolbar renders keyboard shortcut hints", async () => {
     const hints = Array.from(harness.document.querySelectorAll(".rl-toolbar-hint")).map((node) =>
       node.textContent?.trim()
     );
-    assert.deepEqual(hints, ["R", "T", "X", "Shift+Enter"]);
+    assert.deepEqual(hints, ["r", "t", "x", "shift+enter"]);
   } finally {
     harness.cleanup();
   }
@@ -447,6 +447,37 @@ test("shortcuts are ignored while editing text pill", async () => {
 
     dispatchKey(pill, harness.window, "x");
     assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 1);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("shift+enter sends while editing text pill", async () => {
+  const pending = [];
+  const harness = setupContentHarness({
+    onSendMessage(message, callback) {
+      pending.push({ message, callback });
+    },
+  });
+
+  try {
+    await harness.toggleAnnotation();
+    const textButton = harness.document.querySelector("button[data-action='tool-text']");
+    assert.ok(textButton);
+    textButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+    dispatchMouse(overlay, harness.window, "click", 80, 60);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    assert.equal(pill.contentEditable, "true");
+
+    dispatchKey(pill, harness.window, "Enter", { shiftKey: true });
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].message.type, "redline:capture");
+    assert.equal(pending[0].message.metadata.captureMode, "annotated");
   } finally {
     harness.cleanup();
   }

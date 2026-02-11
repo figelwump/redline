@@ -116,7 +116,7 @@ function bootstrapRedline() {
             <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
           </svg>
         </button>
-        <span class="rl-toolbar-hint">R</span>
+        <span class="rl-toolbar-hint">r</span>
       </div>
       <div class="rl-toolbar-control">
         <button type="button" class="rl-icon-button" data-action="tool-text" title="Text" aria-label="Text">
@@ -124,7 +124,7 @@ function bootstrapRedline() {
             <path d="M3 3.5h10M8 3.5v9M6 12.5h4"></path>
           </svg>
         </button>
-        <span class="rl-toolbar-hint">T</span>
+        <span class="rl-toolbar-hint">t</span>
       </div>
       <div class="rl-toolbar-control">
         <button type="button" class="rl-icon-button" data-action="clear" title="Clear" aria-label="Clear">
@@ -133,11 +133,11 @@ function bootstrapRedline() {
             <path d="M6.75 6.75l2.5 2.5M9.25 6.75l-2.5 2.5"></path>
           </svg>
         </button>
-        <span class="rl-toolbar-hint">X</span>
+        <span class="rl-toolbar-hint">x</span>
       </div>
       <div class="rl-toolbar-control">
         <button type="button" data-action="send">Send</button>
-        <span class="rl-toolbar-hint">Shift+Enter</span>
+        <span class="rl-toolbar-hint">shift+enter</span>
       </div>
     `;
 
@@ -224,6 +224,13 @@ function bootstrapRedline() {
       return;
     }
 
+    if (event.key === "Enter" && event.shiftKey) {
+      void saveAnnotatedCapture();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     if (isEditableKeyboardTarget(event.target) || isEditableKeyboardTarget(document.activeElement)) {
       return;
     }
@@ -247,13 +254,6 @@ function bootstrapRedline() {
     if (normalizedKey === "x") {
       clearAnnotations();
       showToast("Annotations cleared");
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-
-    if (event.key === "Enter" && event.shiftKey) {
-      void saveAnnotatedCapture();
       event.preventDefault();
       event.stopPropagation();
     }

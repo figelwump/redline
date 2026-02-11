@@ -19,7 +19,9 @@ function bootstrapRedline() {
     sendButtonElement: null,
     saveTabButtonElement: null,
     toastElement: null,
-    annotations: new Set(),
+    annotations: new Map(),
+    nextAnnotationId: 1,
+    focusedAnnotationId: null,
     activeRectangle: null,
     isSending: false,
   };
@@ -98,6 +100,7 @@ function bootstrapRedline() {
     state.saveTabButtonElement = null;
     state.toastElement = null;
     state.annotations.clear();
+    state.focusedAnnotationId = null;
     state.activeRectangle = null;
     state.currentTool = TOOL_RECTANGLE;
     state.annotationMode = false;
@@ -119,13 +122,8 @@ function bootstrapRedline() {
       </button>
       <button type="button" class="rl-icon-button" data-action="clear" title="Clear" aria-label="Clear">
         <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M2.5 10.5h8.75l2.25-6H4.75zM6 4.5l1-2h3l1 2"></path>
-        </svg>
-      </button>
-      <button type="button" class="rl-icon-button" data-action="save-tab" title="Save Tab Highlight" aria-label="Save Tab Highlight">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <rect x="2.5" y="2.5" width="11" height="11" rx="1"></rect>
-          <path d="M2.5 5.5h11"></path>
+          <circle cx="8" cy="8" r="5.5"></circle>
+          <path d="M6 6l4 4M10 6l-4 4"></path>
         </svg>
       </button>
       <button type="button" data-action="send">Send</button>
@@ -186,9 +184,21 @@ function bootstrapRedline() {
   }
 
   function onDocumentKeyDown(event) {
-    if (event.key === "Escape") {
-      teardownAnnotationMode();
+    if (event.key !== "Escape") {
+      return;
     }
+
+    if (state.focusedAnnotationId !== null) {
+      removeAnnotation(state.focusedAnnotationId);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    clearAnnotations();
+    teardownAnnotationMode();
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function onOverlayWheel(event) {
@@ -209,13 +219,22 @@ function bootstrapRedline() {
       return;
     }
 
+    const focusedId = getAnnotationIdFromTarget(event.target);
+    if (focusedId !== null) {
+      setFocusedAnnotation(focusedId);
+      return;
+    }
+
     const startPoint = { x: event.clientX, y: event.clientY };
     const element = document.createElement("div");
     element.className = "rl-rect-annotation";
+    const annotation = createAnnotationEntry();
+    attachElementToAnnotation(annotation.id, element, "rect");
+
     state.overlayElement?.appendChild(element);
-    state.annotations.add(element);
-    state.activeRectangle = { element, startPoint };
+    state.activeRectangle = { element, startPoint, annotationId: annotation.id };
     updateRectangleElement(element, startPoint, startPoint);
+    setFocusedAnnotation(annotation.id);
     event.preventDefault();
   }
 
@@ -235,7 +254,7 @@ function bootstrapRedline() {
       return;
     }
 
-    const { element, startPoint } = state.activeRectangle;
+    const { element, startPoint, annotationId } = state.activeRectangle;
     const left = Math.min(startPoint.x, event.clientX);
     const top = Math.min(startPoint.y, event.clientY);
     const width = Math.abs(event.clientX - startPoint.x);
@@ -244,12 +263,12 @@ function bootstrapRedline() {
     state.activeRectangle = null;
 
     if (width < 4 || height < 4) {
-      state.annotations.delete(element);
-      element.remove();
+      removeAnnotation(annotationId);
       return;
     }
 
-    createTextAnnotation(left + width / 2, top + height / 2);
+    createTextAnnotation(left + width / 2, top + height / 2, { annotationId });
+    setFocusedAnnotation(annotationId);
   }
 
   function onOverlayClick(event) {
@@ -258,6 +277,12 @@ function bootstrapRedline() {
     }
 
     if (isInToolbar(event.target)) {
+      return;
+    }
+
+    const focusedId = getAnnotationIdFromTarget(event.target);
+    if (focusedId !== null) {
+      setFocusedAnnotation(focusedId);
       return;
     }
 
@@ -276,7 +301,11 @@ function bootstrapRedline() {
     element.style.height = `${height}px`;
   }
 
-  function createTextAnnotation(x, y) {
+  function createTextAnnotation(x, y, options = {}) {
+    const annotation = options.annotationId
+      ? state.annotations.get(options.annotationId) ?? createAnnotationEntry()
+      : createAnnotationEntry();
+
     const wrapper = document.createElement("div");
     wrapper.className = "rl-text-annotation";
     wrapper.style.left = `${x}px`;
@@ -307,8 +336,12 @@ function bootstrapRedline() {
     const commit = () => {
       pill.contentEditable = "false";
       if (!pill.textContent?.trim()) {
-        wrapper.remove();
-        state.annotations.delete(wrapper);
+        if (annotation.rectElement) {
+          detachTextFromAnnotation(annotation.id);
+          return;
+        }
+
+        removeAnnotation(annotation.id);
       }
     };
 
@@ -326,7 +359,11 @@ function bootstrapRedline() {
     wrapper.appendChild(pill);
 
     state.overlayElement?.appendChild(wrapper);
-    state.annotations.add(wrapper);
+    attachElementToAnnotation(annotation.id, wrapper, "text");
+    annotation.textPill = pill;
+    wrapper.addEventListener("mousedown", () => setFocusedAnnotation(annotation.id));
+    pill.addEventListener("focus", () => setFocusedAnnotation(annotation.id));
+    setFocusedAnnotation(annotation.id);
     focusEditable(pill);
   }
 
@@ -366,8 +403,10 @@ function bootstrapRedline() {
   }
 
   function clearAnnotations() {
-    state.annotations.forEach((annotation) => annotation.remove());
-    state.annotations.clear();
+    Array.from(state.annotations.keys()).forEach((annotationId) => {
+      removeAnnotation(annotationId);
+    });
+    state.focusedAnnotationId = null;
     state.activeRectangle = null;
   }
 
@@ -382,15 +421,118 @@ function bootstrapRedline() {
 
     const element = document.createElement("div");
     element.className = "rl-rect-annotation rl-full-tab-annotation";
+    const annotation = createAnnotationEntry();
+    attachElementToAnnotation(annotation.id, element, "rect");
+    element.addEventListener("mousedown", () => setFocusedAnnotation(annotation.id));
+
     state.overlayElement.appendChild(element);
-    state.annotations.add(element);
     element.style.left = `${inset}px`;
     element.style.top = `${inset}px`;
     element.style.width = `${width}px`;
     element.style.height = `${height}px`;
 
-    createTextAnnotation(inset + width / 2, inset + height / 2);
+    createTextAnnotation(inset + width / 2, inset + height / 2, { annotationId: annotation.id });
+    setFocusedAnnotation(annotation.id);
     showToast("Tab highlighted. Add notes, then Send.");
+  }
+
+  function createAnnotationEntry() {
+    const annotation = {
+      id: state.nextAnnotationId,
+      rectElement: null,
+      textWrapper: null,
+      textPill: null,
+    };
+    state.nextAnnotationId += 1;
+    state.annotations.set(annotation.id, annotation);
+    return annotation;
+  }
+
+  function attachElementToAnnotation(annotationId, element, type) {
+    const annotation = state.annotations.get(annotationId);
+    if (!annotation) {
+      return;
+    }
+
+    element.dataset.rlAnnotationId = String(annotationId);
+    if (type === "rect") {
+      annotation.rectElement = element;
+    }
+    if (type === "text") {
+      annotation.textWrapper = element;
+    }
+  }
+
+  function detachTextFromAnnotation(annotationId) {
+    const annotation = state.annotations.get(annotationId);
+    if (!annotation) {
+      return;
+    }
+
+    annotation.textWrapper?.remove();
+    annotation.textWrapper = null;
+    annotation.textPill = null;
+
+    if (!annotation.rectElement) {
+      state.annotations.delete(annotationId);
+      if (state.focusedAnnotationId === annotationId) {
+        state.focusedAnnotationId = null;
+      }
+    } else if (state.focusedAnnotationId === annotationId) {
+      setFocusedAnnotation(annotationId);
+    }
+  }
+
+  function removeAnnotation(annotationId) {
+    const annotation = state.annotations.get(annotationId);
+    if (!annotation) {
+      return;
+    }
+
+    annotation.rectElement?.remove();
+    annotation.textWrapper?.remove();
+    state.annotations.delete(annotationId);
+    if (state.focusedAnnotationId === annotationId) {
+      state.focusedAnnotationId = null;
+    }
+  }
+
+  function setFocusedAnnotation(annotationId) {
+    if (state.focusedAnnotationId === annotationId) {
+      return;
+    }
+
+    state.annotations.forEach((annotation) => {
+      annotation.rectElement?.classList.remove("rl-focused");
+      annotation.textWrapper?.classList.remove("rl-focused");
+    });
+
+    state.focusedAnnotationId = annotationId;
+    if (annotationId === null) {
+      return;
+    }
+
+    const annotation = state.annotations.get(annotationId);
+    annotation?.rectElement?.classList.add("rl-focused");
+    annotation?.textWrapper?.classList.add("rl-focused");
+  }
+
+  function getAnnotationIdFromTarget(target) {
+    if (!(target instanceof Element)) {
+      return null;
+    }
+
+    const annotatedElement = target.closest("[data-rl-annotation-id]");
+    if (!annotatedElement) {
+      return null;
+    }
+
+    const parsed = Number.parseInt(annotatedElement.getAttribute("data-rl-annotation-id") ?? "", 10);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+
+    return parsed;
   }
 
   async function saveAnnotatedCapture() {

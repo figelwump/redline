@@ -41,6 +41,7 @@ function setupContentHarness(options = {}) {
     window: global.window,
     document: global.document,
     Node: global.Node,
+    Element: global.Element,
     navigator: global.navigator,
     HTMLElement: global.HTMLElement,
     HTMLButtonElement: global.HTMLButtonElement,
@@ -52,6 +53,7 @@ function setupContentHarness(options = {}) {
   global.window = window;
   global.document = window.document;
   global.Node = window.Node;
+  global.Element = window.Element;
   global.navigator = window.navigator;
   global.HTMLElement = window.HTMLElement;
   global.HTMLButtonElement = window.HTMLButtonElement;
@@ -93,6 +95,12 @@ function setupContentHarness(options = {}) {
         delete global.Node;
       } else {
         global.Node = previousGlobals.Node;
+      }
+
+      if (previousGlobals.Element === undefined) {
+        delete global.Element;
+      } else {
+        global.Element = previousGlobals.Element;
       }
 
       if (previousGlobals.navigator === undefined) {
@@ -244,18 +252,15 @@ test("send action shows success toast under toolbar and keeps UI active", async 
     const toolbar = harness.document.querySelector("#rl-toolbar");
     const root = harness.document.querySelector("#rl-root");
     const sendButton = harness.document.querySelector("button[data-action='send']");
-    const saveTabButton = harness.document.querySelector("button[data-action='save-tab']");
     const toast = harness.document.querySelector("#rl-toast");
     assert.ok(toolbar);
     assert.ok(root);
     assert.ok(sendButton);
-    assert.ok(saveTabButton);
     assert.ok(toast);
 
     sendButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
     assert.equal(toolbar.classList.contains("rl-hidden"), true);
     assert.equal(sendButton.disabled, true);
-    assert.equal(saveTabButton.disabled, true);
     assert.equal(pending.length, 1);
     assert.equal(pending[0].message.type, "redline:capture");
     assert.equal(pending[0].message.metadata.captureMode, "annotated");
@@ -265,7 +270,6 @@ test("send action shows success toast under toolbar and keeps UI active", async 
 
     assert.equal(toolbar.classList.contains("rl-hidden"), false);
     assert.equal(sendButton.disabled, false);
-    assert.equal(saveTabButton.disabled, false);
     assert.match(
       toast.textContent,
       /Successfully sent\. Use \/redline in your agent to pull them in\./
@@ -281,35 +285,54 @@ test("send action shows success toast under toolbar and keeps UI active", async 
   }
 });
 
-test("save-tab creates full-tab rectangle and centered text without sending", async () => {
-  const pending = [];
-  const harness = setupContentHarness({
-    onSendMessage(message, callback) {
-      pending.push({ message, callback });
-    },
-  });
-
+test("save-tab control is hidden from toolbar", async () => {
+  const harness = setupContentHarness();
   try {
     await harness.toggleAnnotation();
 
     const saveTabButton = harness.document.querySelector("button[data-action='save-tab']");
-    assert.ok(saveTabButton);
+    assert.equal(saveTabButton, null);
+  } finally {
+    harness.cleanup();
+  }
+});
 
-    saveTabButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+test("escape removes focused annotation before hiding app", async () => {
+  const harness = setupContentHarness();
 
-    assert.equal(pending.length, 0);
-    const rectangles = harness.document.querySelectorAll(".rl-rect-annotation.rl-full-tab-annotation");
-    assert.equal(rectangles.length, 1);
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
 
-    const rectangle = rectangles[0];
-    assert.equal(rectangle.style.left, "2px");
-    assert.equal(rectangle.style.top, "2px");
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
 
-    const textAnnotations = harness.document.querySelectorAll(".rl-text-annotation");
-    assert.equal(textAnnotations.length, 1);
-    const pill = textAnnotations[0].querySelector(".rl-text-pill");
-    assert.ok(pill);
-    assert.equal(pill.contentEditable, "true");
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 1);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 1);
+
+    harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.ok(harness.document.querySelector("#rl-overlay"));
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 0);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 0);
+
+    harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(harness.document.querySelector("#rl-overlay"), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("escape with no focused annotation hides app", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+    assert.ok(harness.document.querySelector("#rl-overlay"));
+
+    harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(harness.document.querySelector("#rl-overlay"), null);
   } finally {
     harness.cleanup();
   }

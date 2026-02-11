@@ -117,12 +117,20 @@
   background: rgba(255, 66, 66, 0.14);
 }
 
+.rl-rect-annotation.rl-focused {
+  box-shadow: 0 0 0 2px rgba(255, 205, 61, 0.9);
+}
+
 .rl-text-annotation {
   position: fixed;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   transform: translate(-5px, -5px);
+}
+
+.rl-text-annotation.rl-focused .rl-text-pill {
+  box-shadow: 0 0 0 2px rgba(255, 205, 61, 0.9);
 }
 
 .rl-text-dot {

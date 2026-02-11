@@ -17,9 +17,22 @@ EOF
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTENSION_ID=""
-NATIVE_HOST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
 FEEDBACK_DIR="$HOME/.claude/feedback"
 SKILLS_DIR="$HOME/.claude/skills"
+
+case "${OSTYPE:-}" in
+  darwin*)
+    NATIVE_HOST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+    ;;
+  linux*)
+    NATIVE_HOST_DIR="$HOME/.config/google-chrome/NativeMessagingHosts"
+    ;;
+  *)
+    echo "Unsupported OS type: ${OSTYPE:-unknown}" >&2
+    echo "Pass --native-host-dir to override explicitly if needed." >&2
+    exit 1
+    ;;
+esac
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -85,7 +98,9 @@ if [[ ! -f "$SKILL_SOURCE_PATH" ]]; then
 fi
 
 mkdir -p "$NATIVE_HOST_DIR" "$FEEDBACK_DIR" "$SKILLS_DIR"
+chmod 700 "$FEEDBACK_DIR" "$SKILLS_DIR"
 chmod +x "$HOST_SCRIPT_PATH"
+node --check "$HOST_SCRIPT_PATH" >/dev/null
 
 node - "$HOST_TEMPLATE_PATH" "$HOST_MANIFEST_PATH" "$HOST_SCRIPT_PATH" "$EXTENSION_ID" <<'NODE'
 const fs = require("node:fs");
@@ -98,6 +113,29 @@ fs.writeFileSync(targetPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 NODE
 
 cp "$SKILL_SOURCE_PATH" "$SKILL_TARGET_PATH"
+
+if [[ ! -f "$HOST_MANIFEST_PATH" ]]; then
+  echo "Failed to create host manifest at $HOST_MANIFEST_PATH" >&2
+  exit 1
+fi
+
+if [[ ! -f "$SKILL_TARGET_PATH" ]]; then
+  echo "Failed to install skill file at $SKILL_TARGET_PATH" >&2
+  exit 1
+fi
+
+node -e '
+const fs = require("node:fs");
+const [manifestPath, hostScriptPath, extensionId] = process.argv.slice(1);
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+if (manifest.path !== hostScriptPath) {
+  throw new Error(`Manifest path mismatch: ${manifest.path}`);
+}
+const expectedOrigin = `chrome-extension://${extensionId}/`;
+if (!Array.isArray(manifest.allowed_origins) || !manifest.allowed_origins.includes(expectedOrigin)) {
+  throw new Error("Manifest allowed_origins missing expected extension origin.");
+}
+' "$HOST_MANIFEST_PATH" "$HOST_SCRIPT_PATH" "$EXTENSION_ID"
 
 cat <<EOF
 Redline installation complete.

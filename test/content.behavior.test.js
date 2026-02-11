@@ -62,6 +62,9 @@ function setupContentHarness(options = {}) {
   const modulePath = path.resolve(__dirname, "../content.js");
   delete require.cache[modulePath];
   require(modulePath);
+  if (typeof listeners.onMessage !== "function") {
+    throw new Error("content.js did not register a runtime onMessage listener");
+  }
 
   async function toggleAnnotation() {
     return new Promise((resolve) => {
@@ -70,61 +73,63 @@ function setupContentHarness(options = {}) {
   }
 
   function cleanup() {
-    delete require.cache[modulePath];
-    dom.window.close();
+    try {
+      delete require.cache[modulePath];
+      dom.window.close();
+    } finally {
+      if (previousGlobals.window === undefined) {
+        delete global.window;
+      } else {
+        global.window = previousGlobals.window;
+      }
 
-    if (previousGlobals.window === undefined) {
-      delete global.window;
-    } else {
-      global.window = previousGlobals.window;
-    }
+      if (previousGlobals.document === undefined) {
+        delete global.document;
+      } else {
+        global.document = previousGlobals.document;
+      }
 
-    if (previousGlobals.document === undefined) {
-      delete global.document;
-    } else {
-      global.document = previousGlobals.document;
-    }
+      if (previousGlobals.Node === undefined) {
+        delete global.Node;
+      } else {
+        global.Node = previousGlobals.Node;
+      }
 
-    if (previousGlobals.Node === undefined) {
-      delete global.Node;
-    } else {
-      global.Node = previousGlobals.Node;
-    }
+      if (previousGlobals.navigator === undefined) {
+        delete global.navigator;
+      } else {
+        global.navigator = previousGlobals.navigator;
+      }
 
-    if (previousGlobals.navigator === undefined) {
-      delete global.navigator;
-    } else {
-      global.navigator = previousGlobals.navigator;
-    }
+      if (previousGlobals.HTMLElement === undefined) {
+        delete global.HTMLElement;
+      } else {
+        global.HTMLElement = previousGlobals.HTMLElement;
+      }
 
-    if (previousGlobals.HTMLElement === undefined) {
-      delete global.HTMLElement;
-    } else {
-      global.HTMLElement = previousGlobals.HTMLElement;
-    }
+      if (previousGlobals.HTMLButtonElement === undefined) {
+        delete global.HTMLButtonElement;
+      } else {
+        global.HTMLButtonElement = previousGlobals.HTMLButtonElement;
+      }
 
-    if (previousGlobals.HTMLButtonElement === undefined) {
-      delete global.HTMLButtonElement;
-    } else {
-      global.HTMLButtonElement = previousGlobals.HTMLButtonElement;
-    }
+      if (previousGlobals.MouseEvent === undefined) {
+        delete global.MouseEvent;
+      } else {
+        global.MouseEvent = previousGlobals.MouseEvent;
+      }
 
-    if (previousGlobals.MouseEvent === undefined) {
-      delete global.MouseEvent;
-    } else {
-      global.MouseEvent = previousGlobals.MouseEvent;
-    }
+      if (previousGlobals.KeyboardEvent === undefined) {
+        delete global.KeyboardEvent;
+      } else {
+        global.KeyboardEvent = previousGlobals.KeyboardEvent;
+      }
 
-    if (previousGlobals.KeyboardEvent === undefined) {
-      delete global.KeyboardEvent;
-    } else {
-      global.KeyboardEvent = previousGlobals.KeyboardEvent;
-    }
-
-    if (previousGlobals.chrome === undefined) {
-      delete global.chrome;
-    } else {
-      global.chrome = previousGlobals.chrome;
+      if (previousGlobals.chrome === undefined) {
+        delete global.chrome;
+      } else {
+        global.chrome = previousGlobals.chrome;
+      }
     }
   }
 
@@ -177,6 +182,11 @@ test("rectangle tool creates finalized rectangle annotation", async () => {
 
     const rectangles = harness.document.querySelectorAll(".rl-rect-annotation");
     assert.equal(rectangles.length, 1);
+    const rectangle = rectangles[0];
+    assert.equal(rectangle.style.left, "10px");
+    assert.equal(rectangle.style.top, "10px");
+    assert.equal(rectangle.style.width, "110px");
+    assert.equal(rectangle.style.height, "70px");
   } finally {
     harness.cleanup();
   }
@@ -208,6 +218,7 @@ test("text tool creates dot/connector/pill and commits on Enter", async () => {
     pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
 
     assert.equal(pill.contentEditable, "false");
+    assert.equal(pill.textContent, "Needs spacing fix");
   } finally {
     harness.cleanup();
   }

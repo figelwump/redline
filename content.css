@@ -20,6 +20,7 @@
   right: 16px;
   z-index: 2147483647;
   display: flex;
+  align-items: flex-end;
   gap: 8px;
   padding: 8px;
   pointer-events: auto;
@@ -28,6 +29,22 @@
   background: rgba(20, 21, 24, 0.88);
   backdrop-filter: blur(8px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+}
+
+#rl-toolbar .rl-toolbar-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+#rl-toolbar .rl-toolbar-hint {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  user-select: none;
 }
 
 #rl-toolbar button {

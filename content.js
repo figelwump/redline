@@ -110,23 +110,35 @@ function bootstrapRedline() {
     const toolbar = document.createElement("div");
     toolbar.id = "rl-toolbar";
     toolbar.innerHTML = `
-      <button type="button" class="rl-icon-button" data-action="tool-rectangle" title="Rectangle" aria-label="Rectangle">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
-        </svg>
-      </button>
-      <button type="button" class="rl-icon-button" data-action="tool-text" title="Text" aria-label="Text">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M3 3.5h10M8 3.5v9M6 12.5h4"></path>
-        </svg>
-      </button>
-      <button type="button" class="rl-icon-button" data-action="clear" title="Clear" aria-label="Clear">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="8" cy="8" r="5.5"></circle>
-          <path d="M6.75 6.75l2.5 2.5M9.25 6.75l-2.5 2.5"></path>
-        </svg>
-      </button>
-      <button type="button" data-action="send">Send</button>
+      <div class="rl-toolbar-control">
+        <button type="button" class="rl-icon-button" data-action="tool-rectangle" title="Rectangle" aria-label="Rectangle">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
+          </svg>
+        </button>
+        <span class="rl-toolbar-hint">R</span>
+      </div>
+      <div class="rl-toolbar-control">
+        <button type="button" class="rl-icon-button" data-action="tool-text" title="Text" aria-label="Text">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 3.5h10M8 3.5v9M6 12.5h4"></path>
+          </svg>
+        </button>
+        <span class="rl-toolbar-hint">T</span>
+      </div>
+      <div class="rl-toolbar-control">
+        <button type="button" class="rl-icon-button" data-action="clear" title="Clear" aria-label="Clear">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="5.5"></circle>
+            <path d="M6.75 6.75l2.5 2.5M9.25 6.75l-2.5 2.5"></path>
+          </svg>
+        </button>
+        <span class="rl-toolbar-hint">X</span>
+      </div>
+      <div class="rl-toolbar-control">
+        <button type="button" data-action="send">Send</button>
+        <span class="rl-toolbar-hint">Shift+Enter</span>
+      </div>
     `;
 
     toolbar.addEventListener("click", (event) => {

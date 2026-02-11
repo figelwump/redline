@@ -353,6 +353,21 @@ test("save-tab control is hidden from toolbar", async () => {
   }
 });
 
+test("toolbar renders keyboard shortcut hints", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+
+    const hints = Array.from(harness.document.querySelectorAll(".rl-toolbar-hint")).map((node) =>
+      node.textContent?.trim()
+    );
+    assert.deepEqual(hints, ["R", "T", "X", "Shift+Enter"]);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("keyboard shortcuts switch tools and send", async () => {
   const pending = [];
   const harness = setupContentHarness({

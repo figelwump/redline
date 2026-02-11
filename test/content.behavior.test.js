@@ -324,7 +324,7 @@ test("send action shows success toast with done button that clears and hides UI"
     assert.equal(sendButton.disabled, false);
     assert.match(
       toast.textContent,
-      /Successfully sent\. Use \/redline in your agent to pull them in\./
+      /Successfully saved screenshot feedback\./
     );
     assert.equal(toast.classList.contains("rl-visible"), true);
     assert.notEqual(toast.style.top, "");

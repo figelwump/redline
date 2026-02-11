@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Redline",
-  "description": "Annotate pages with rectangles and text callouts, then send a screenshot to Claude feedback.",
+  "description": "Annotate pages with rectangles and text callouts, then save a local feedback screenshot.",
   "version": "0.1.0",
   "permissions": ["activeTab", "scripting", "nativeMessaging"],
   "background": {

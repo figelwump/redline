@@ -1,6 +1,6 @@
 const CONTENT_SCRIPT_FILES = ["content.js"];
 const CONTENT_STYLE_FILES = ["content.css"];
-const NATIVE_HOST_NAME = "com.claude.feedback";
+const NATIVE_HOST_NAME = "com.redline.feedback";
 
 async function ensureContentScript(tabId) {
   try {

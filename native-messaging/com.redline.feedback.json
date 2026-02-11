@@ -1,5 +1,5 @@
 {
-  "name": "com.claude.feedback",
+  "name": "com.redline.feedback",
   "description": "Native messaging host for Redline feedback screenshots.",
   "path": "REPLACE_WITH_ABSOLUTE_PATH_TO_HOST_JS",
   "type": "stdio",

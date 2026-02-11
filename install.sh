@@ -10,7 +10,8 @@ Usage:
 Options:
   --native-host-dir <path>  Override Chrome native host manifest directory.
   --feedback-dir <path>     Override feedback output directory. Default: ~/.redline/feedback
-  --skills-dir <path>       Override Claude skills directory. Default: ~/.claude/skills
+  --install-skill           Install optional Codex skill file.
+  --skills-dir <path>       Override skill install directory. Default: ~/.codex/skills
   -h, --help                Show this help text.
 EOF
 }
@@ -18,7 +19,8 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTENSION_ID=""
 FEEDBACK_DIR="$HOME/.redline/feedback"
-SKILLS_DIR="$HOME/.claude/skills"
+SKILLS_DIR="$HOME/.codex/skills"
+INSTALL_SKILL=false
 
 case "${OSTYPE:-}" in
   darwin*)
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
     --feedback-dir)
       FEEDBACK_DIR="${2:-}"
       shift 2
+      ;;
+    --install-skill)
+      INSTALL_SKILL=true
+      shift
       ;;
     --skills-dir)
       SKILLS_DIR="${2:-}"
@@ -78,8 +84,8 @@ fi
 
 HOST_SCRIPT_PATH="$SCRIPT_DIR/native-messaging/host.js"
 HOST_LAUNCHER_PATH="$SCRIPT_DIR/native-messaging/host-launcher.sh"
-HOST_TEMPLATE_PATH="$SCRIPT_DIR/native-messaging/com.claude.feedback.json"
-HOST_MANIFEST_PATH="$NATIVE_HOST_DIR/com.claude.feedback.json"
+HOST_TEMPLATE_PATH="$SCRIPT_DIR/native-messaging/com.redline.feedback.json"
+HOST_MANIFEST_PATH="$NATIVE_HOST_DIR/com.redline.feedback.json"
 SKILL_SOURCE_PATH="$SCRIPT_DIR/skills/feedback.md"
 SKILL_TARGET_PATH="$SKILLS_DIR/feedback.md"
 NODE_BIN_PATH="$(command -v node || true)"
@@ -99,13 +105,19 @@ if [[ -z "$NODE_BIN_PATH" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$SKILL_SOURCE_PATH" ]]; then
+if [[ "$INSTALL_SKILL" == "true" && ! -f "$SKILL_SOURCE_PATH" ]]; then
   echo "Missing skill template: $SKILL_SOURCE_PATH" >&2
   exit 1
 fi
 
-mkdir -p "$NATIVE_HOST_DIR" "$FEEDBACK_DIR" "$SKILLS_DIR"
-chmod 700 "$FEEDBACK_DIR" "$SKILLS_DIR"
+mkdir -p "$NATIVE_HOST_DIR" "$FEEDBACK_DIR"
+chmod 700 "$FEEDBACK_DIR"
+
+if [[ "$INSTALL_SKILL" == "true" ]]; then
+  mkdir -p "$SKILLS_DIR"
+  chmod 700 "$SKILLS_DIR"
+fi
+
 chmod +x "$HOST_SCRIPT_PATH"
 "$NODE_BIN_PATH" --check "$HOST_SCRIPT_PATH" >/dev/null
 
@@ -125,14 +137,16 @@ manifest.allowed_origins = [`chrome-extension://${extensionId}/`];
 fs.writeFileSync(targetPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 NODE
 
-cp "$SKILL_SOURCE_PATH" "$SKILL_TARGET_PATH"
+if [[ "$INSTALL_SKILL" == "true" ]]; then
+  cp "$SKILL_SOURCE_PATH" "$SKILL_TARGET_PATH"
+fi
 
 if [[ ! -f "$HOST_MANIFEST_PATH" ]]; then
   echo "Failed to create host manifest at $HOST_MANIFEST_PATH" >&2
   exit 1
 fi
 
-if [[ ! -f "$SKILL_TARGET_PATH" ]]; then
+if [[ "$INSTALL_SKILL" == "true" && ! -f "$SKILL_TARGET_PATH" ]]; then
   echo "Failed to install skill file at $SKILL_TARGET_PATH" >&2
   exit 1
 fi
@@ -160,7 +174,7 @@ Feedback directory:
   $FEEDBACK_DIR
 
 Installed skill:
-  $SKILL_TARGET_PATH
+  $(if [[ "$INSTALL_SKILL" == "true" ]]; then printf '%s' "$SKILL_TARGET_PATH"; else printf '%s' "(skipped)"; fi)
 
 Next:
   1. Load this directory as an unpacked extension in chrome://extensions

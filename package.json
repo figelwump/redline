@@ -1,6 +1,8 @@
 {
   "name": "redline",
   "version": "0.1.0",
+  "description": "Chrome extension for annotating pages and saving screenshot feedback locally.",
+  "license": "MIT",
   "private": true,
   "type": "commonjs",
   "scripts": {

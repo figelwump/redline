@@ -152,18 +152,6 @@ function dispatchMouse(target, window, type, x, y, extra = {}) {
   );
 }
 
-async function waitForCondition(predicate, attempts = 20) {
-  for (let index = 0; index < attempts; index += 1) {
-    if (predicate()) {
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-
-  throw new Error("Condition was not met within allotted attempts.");
-}
-
 test("toggle message creates and removes overlay UI", async () => {
   const harness = setupContentHarness();
 
@@ -180,7 +168,7 @@ test("toggle message creates and removes overlay UI", async () => {
   }
 });
 
-test("rectangle tool creates finalized rectangle annotation", async () => {
+test("rectangle tool creates finalized rectangle and centered text pill", async () => {
   const harness = setupContentHarness();
 
   try {
@@ -199,6 +187,12 @@ test("rectangle tool creates finalized rectangle annotation", async () => {
     assert.equal(rectangle.style.top, "10px");
     assert.equal(rectangle.style.width, "110px");
     assert.equal(rectangle.style.height, "70px");
+
+    const textAnnotations = harness.document.querySelectorAll(".rl-text-annotation");
+    assert.equal(textAnnotations.length, 1);
+    const textPill = textAnnotations[0].querySelector(".rl-text-pill");
+    assert.ok(textPill);
+    assert.equal(textPill.contentEditable, "true");
   } finally {
     harness.cleanup();
   }
@@ -236,7 +230,7 @@ test("text tool creates dot/connector/pill and commits on Enter", async () => {
   }
 });
 
-test("send action hides toolbar while request is pending and restores after callback", async () => {
+test("send action shows success toast under toolbar and keeps UI active", async () => {
   const pending = [];
   const harness = setupContentHarness({
     onSendMessage(message, callback) {
@@ -248,28 +242,46 @@ test("send action hides toolbar while request is pending and restores after call
     await harness.toggleAnnotation();
 
     const toolbar = harness.document.querySelector("#rl-toolbar");
+    const root = harness.document.querySelector("#rl-root");
     const sendButton = harness.document.querySelector("button[data-action='send']");
+    const saveTabButton = harness.document.querySelector("button[data-action='save-tab']");
+    const toast = harness.document.querySelector("#rl-toast");
     assert.ok(toolbar);
+    assert.ok(root);
     assert.ok(sendButton);
+    assert.ok(saveTabButton);
+    assert.ok(toast);
 
     sendButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
     assert.equal(toolbar.classList.contains("rl-hidden"), true);
     assert.equal(sendButton.disabled, true);
+    assert.equal(saveTabButton.disabled, true);
     assert.equal(pending.length, 1);
     assert.equal(pending[0].message.type, "redline:capture");
     assert.equal(pending[0].message.metadata.captureMode, "annotated");
 
     pending[0].callback({ success: true, path: "/tmp/mock.png" });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     assert.equal(toolbar.classList.contains("rl-hidden"), false);
     assert.equal(sendButton.disabled, false);
+    assert.equal(saveTabButton.disabled, false);
+    assert.match(
+      toast.textContent,
+      /Successfully sent\. Use \/redline in your agent to pull them in\./
+    );
+    assert.equal(toast.classList.contains("rl-visible"), true);
+    assert.notEqual(toast.style.top, "");
+    assert.notEqual(toast.style.left, "");
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.ok(harness.document.querySelector("#rl-root"));
   } finally {
     harness.cleanup();
   }
 });
 
-test("save-tab action hides redline UI while request is pending and restores after callback", async () => {
+test("save-tab creates full-tab rectangle and centered text without sending", async () => {
   const pending = [];
   const harness = setupContentHarness({
     onSendMessage(message, callback) {
@@ -280,28 +292,24 @@ test("save-tab action hides redline UI while request is pending and restores aft
   try {
     await harness.toggleAnnotation();
 
-    const root = harness.document.querySelector("#rl-root");
-    const sendButton = harness.document.querySelector("button[data-action='send']");
     const saveTabButton = harness.document.querySelector("button[data-action='save-tab']");
-    assert.ok(root);
-    assert.ok(sendButton);
     assert.ok(saveTabButton);
 
     saveTabButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
-    await waitForCondition(() => pending.length === 1);
 
-    assert.equal(root.classList.contains("rl-capture-hidden"), true);
-    assert.equal(saveTabButton.disabled, true);
-    assert.equal(sendButton.disabled, true);
-    assert.equal(pending[0].message.type, "redline:capture");
-    assert.equal(pending[0].message.metadata.captureMode, "tab");
+    assert.equal(pending.length, 0);
+    const rectangles = harness.document.querySelectorAll(".rl-rect-annotation.rl-full-tab-annotation");
+    assert.equal(rectangles.length, 1);
 
-    pending[0].callback({ success: true, path: "/tmp/mock-tab.png" });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const rectangle = rectangles[0];
+    assert.equal(rectangle.style.left, "2px");
+    assert.equal(rectangle.style.top, "2px");
 
-    assert.equal(root.classList.contains("rl-capture-hidden"), false);
-    assert.equal(saveTabButton.disabled, false);
-    assert.equal(sendButton.disabled, false);
+    const textAnnotations = harness.document.querySelectorAll(".rl-text-annotation");
+    assert.equal(textAnnotations.length, 1);
+    const pill = textAnnotations[0].querySelector(".rl-text-pill");
+    assert.ok(pill);
+    assert.equal(pill.contentEditable, "true");
   } finally {
     harness.cleanup();
   }

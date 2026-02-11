@@ -107,11 +107,28 @@ function bootstrapRedline() {
     const toolbar = document.createElement("div");
     toolbar.id = "rl-toolbar";
     toolbar.innerHTML = `
-      <button type="button" data-action="tool-rectangle">Rectangle</button>
-      <button type="button" data-action="tool-text">Text</button>
-      <button type="button" data-action="clear">Clear</button>
-      <button type="button" data-action="send">Save</button>
-      <button type="button" data-action="save-tab">Save Tab</button>
+      <button type="button" class="rl-icon-button" data-action="tool-rectangle" title="Rectangle" aria-label="Rectangle">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
+        </svg>
+      </button>
+      <button type="button" class="rl-icon-button" data-action="tool-text" title="Text" aria-label="Text">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M3 3.5h10M8 3.5v9M6 12.5h4"></path>
+        </svg>
+      </button>
+      <button type="button" class="rl-icon-button" data-action="clear" title="Clear" aria-label="Clear">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M2.5 10.5h8.75l2.25-6H4.75zM6 4.5l1-2h3l1 2"></path>
+        </svg>
+      </button>
+      <button type="button" class="rl-icon-button" data-action="save-tab" title="Save Tab Highlight" aria-label="Save Tab Highlight">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="2.5" y="2.5" width="11" height="11" rx="1"></rect>
+          <path d="M2.5 5.5h11"></path>
+        </svg>
+      </button>
+      <button type="button" data-action="send">Send</button>
     `;
 
     toolbar.addEventListener("click", (event) => {
@@ -143,7 +160,7 @@ function bootstrapRedline() {
       }
 
       if (action === "save-tab") {
-        void saveWholeTabCapture();
+        highlightWholeTab();
       }
     });
 
@@ -219,14 +236,20 @@ function bootstrapRedline() {
     }
 
     const { element, startPoint } = state.activeRectangle;
+    const left = Math.min(startPoint.x, event.clientX);
+    const top = Math.min(startPoint.y, event.clientY);
     const width = Math.abs(event.clientX - startPoint.x);
     const height = Math.abs(event.clientY - startPoint.y);
+    updateRectangleElement(element, startPoint, { x: event.clientX, y: event.clientY });
     state.activeRectangle = null;
 
     if (width < 4 || height < 4) {
       state.annotations.delete(element);
       element.remove();
+      return;
     }
+
+    createTextAnnotation(left + width / 2, top + height / 2);
   }
 
   function onOverlayClick(event) {
@@ -348,37 +371,36 @@ function bootstrapRedline() {
     state.activeRectangle = null;
   }
 
+  function highlightWholeTab() {
+    if (!state.overlayElement) {
+      return;
+    }
+
+    const inset = 2;
+    const width = Math.max(window.innerWidth - inset * 2, 4);
+    const height = Math.max(window.innerHeight - inset * 2, 4);
+
+    const element = document.createElement("div");
+    element.className = "rl-rect-annotation rl-full-tab-annotation";
+    state.overlayElement.appendChild(element);
+    state.annotations.add(element);
+    element.style.left = `${inset}px`;
+    element.style.top = `${inset}px`;
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+
+    createTextAnnotation(inset + width / 2, inset + height / 2);
+    showToast("Tab highlighted. Add notes, then Send.");
+  }
+
   async function saveAnnotatedCapture() {
-    await captureScreenshot({
-      mode: "annotated",
-      hideRootForCapture: false,
-      successPrefix: "Saved annotation",
-    });
-  }
-
-  async function saveWholeTabCapture() {
-    await captureScreenshot({
-      mode: "tab",
-      hideRootForCapture: true,
-      successPrefix: "Saved tab screenshot",
-    });
-  }
-
-  async function captureScreenshot({ mode, hideRootForCapture, successPrefix }) {
     if (state.isSending) {
       return;
     }
 
     state.isSending = true;
-    const rootWasHidden = state.rootElement?.classList.contains("rl-capture-hidden") ?? false;
     setCaptureButtonsDisabled(true);
-
-    if (hideRootForCapture) {
-      state.rootElement?.classList.add("rl-capture-hidden");
-      await waitForVisualFrame();
-    } else {
-      state.toolbarElement?.classList.add("rl-hidden");
-    }
+    state.toolbarElement?.classList.add("rl-hidden");
 
     try {
       const response = await sendRuntimeMessage({
@@ -386,7 +408,7 @@ function bootstrapRedline() {
         metadata: {
           url: window.location.href,
           timestamp: new Date().toISOString(),
-          captureMode: mode,
+          captureMode: "annotated",
         },
       });
 
@@ -394,14 +416,11 @@ function bootstrapRedline() {
         throw new Error(response?.error ?? "Capture failed");
       }
 
-      showToast(`${successPrefix} to ${response.path}`);
+      showToast("Successfully sent. Use /redline in your agent to pull them in.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send capture";
       showToast(message, true);
     } finally {
-      if (!rootWasHidden) {
-        state.rootElement?.classList.remove("rl-capture-hidden");
-      }
       setCaptureButtonsDisabled(false);
       state.toolbarElement?.classList.remove("rl-hidden");
       state.isSending = false;
@@ -416,17 +435,6 @@ function bootstrapRedline() {
     if (state.saveTabButtonElement instanceof HTMLButtonElement) {
       state.saveTabButtonElement.disabled = isDisabled;
     }
-  }
-
-  function waitForVisualFrame() {
-    return new Promise((resolve) => {
-      if (typeof window.requestAnimationFrame === "function") {
-        window.requestAnimationFrame(() => resolve());
-        return;
-      }
-
-      window.setTimeout(resolve, 0);
-    });
   }
 
   function sendRuntimeMessage(message) {
@@ -448,6 +456,7 @@ function bootstrapRedline() {
       return;
     }
 
+    positionToastUnderToolbar();
     state.toastElement.textContent = message;
     state.toastElement.classList.toggle("rl-error", isError);
     state.toastElement.classList.add("rl-visible");
@@ -459,6 +468,22 @@ function bootstrapRedline() {
   }
 
   showToast.timeoutId = 0;
+
+  function positionToastUnderToolbar() {
+    if (!state.toolbarElement || !state.toastElement) {
+      return;
+    }
+
+    const toolbarRect = state.toolbarElement.getBoundingClientRect();
+    const toastWidth = Math.min(420, window.innerWidth - 24);
+    const margin = 8;
+    const left = Math.max(12, Math.min(toolbarRect.right - toastWidth, window.innerWidth - toastWidth - 12));
+    const top = Math.min(window.innerHeight - 48, toolbarRect.bottom + margin);
+
+    state.toastElement.style.left = `${left}px`;
+    state.toastElement.style.top = `${top}px`;
+    state.toastElement.style.width = `${toastWidth}px`;
+  }
 
   function isInToolbar(target) {
     if (!(target instanceof Node)) {

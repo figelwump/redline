@@ -31,28 +31,27 @@ Redline is a Chrome extension for visual UI feedback. It lets you draw boxes, ad
 ./install.sh --extension-id <your_extension_id>
 ```
 
-Optional: install the Redline command prompt file.
+Optional: install command prompt files for both Claude and Codex (auto-detected).
 
 ```bash
-./install.sh --extension-id <your_extension_id> --install-command claude
-./install.sh --extension-id <your_extension_id> --install-command codex
+./install.sh --extension-id <your_extension_id> --install-commands
 ```
 
-Defaults:
-- Claude command installs to `~/.claude/commands/redline.md`
-- Codex prompt installs to `~/.codex/prompts/redline.md`
+Install behavior:
+- If `~/.claude` exists, installs `~/.claude/commands/redline.md`
+- If `~/.codex` exists, installs `~/.codex/prompts/redline.md`
+- If either directory is missing, that install is skipped
 
 ## Usage
 
-1. Open a page to annotate.
-2. Click the Redline extension action button.
-3. Use toolbar controls:
+1. Click the Redline extension button.
+2. Use toolbar controls:
    - Rectangle
    - Text
    - Clear
    - Send
-4. Press **Send** to capture and store the screenshot.
-5. Find output in `~/.redline/feedback`:
+3. Press **Send** to capture the full visible tab with your annotations, so the agent gets full page context.
+4. Find output in `~/.redline/feedback`:
    - `feedback-<timestamp>.png`
    - `latest.json`
 
@@ -77,10 +76,6 @@ Run tests:
 ```bash
 npm test
 ```
-
-## Icon Variants
-
-Three icon sets are included. See `icons/README.md` for previews and switch instructions.
 
 ## Project Layout
 

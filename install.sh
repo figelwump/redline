@@ -10,8 +10,7 @@ Usage:
 Options:
   --native-host-dir <path>  Override Chrome native host manifest directory.
   --feedback-dir <path>     Override feedback output directory. Default: ~/.redline/feedback
-  --install-command <target>  Install optional command prompt (target: claude|codex).
-  --commands-dir <path>       Override command install directory for --install-command.
+  --install-commands        Install command prompts for detected assistants.
   -h, --help                Show this help text.
 EOF
 }
@@ -19,8 +18,7 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXTENSION_ID=""
 FEEDBACK_DIR="$HOME/.redline/feedback"
-INSTALL_COMMAND_TARGET=""
-COMMANDS_DIR=""
+INSTALL_COMMANDS=false
 
 case "${OSTYPE:-}" in
   darwin*)
@@ -50,13 +48,9 @@ while [[ $# -gt 0 ]]; do
       FEEDBACK_DIR="${2:-}"
       shift 2
       ;;
-    --install-command)
-      INSTALL_COMMAND_TARGET="${2:-}"
-      shift 2
-      ;;
-    --commands-dir)
-      COMMANDS_DIR="${2:-}"
-      shift 2
+    --install-commands)
+      INSTALL_COMMANDS=true
+      shift
       ;;
     -h|--help)
       usage
@@ -82,26 +76,17 @@ if [[ ! "$EXTENSION_ID" =~ ^[a-p]{32}$ ]]; then
   exit 1
 fi
 
-if [[ -n "$INSTALL_COMMAND_TARGET" && "$INSTALL_COMMAND_TARGET" != "claude" && "$INSTALL_COMMAND_TARGET" != "codex" ]]; then
-  echo "Unsupported command target: $INSTALL_COMMAND_TARGET" >&2
-  echo "Expected --install-command claude or --install-command codex." >&2
-  exit 1
-fi
-
-if [[ -n "$INSTALL_COMMAND_TARGET" && -z "$COMMANDS_DIR" ]]; then
-  if [[ "$INSTALL_COMMAND_TARGET" == "claude" ]]; then
-    COMMANDS_DIR="$HOME/.claude/commands"
-  else
-    COMMANDS_DIR="$HOME/.codex/prompts"
-  fi
-fi
-
 HOST_SCRIPT_PATH="$SCRIPT_DIR/native-messaging/host.js"
 HOST_LAUNCHER_PATH="$SCRIPT_DIR/native-messaging/host-launcher.sh"
 HOST_TEMPLATE_PATH="$SCRIPT_DIR/native-messaging/com.redline.feedback.json"
 HOST_MANIFEST_PATH="$NATIVE_HOST_DIR/com.redline.feedback.json"
 COMMAND_SOURCE_PATH="$SCRIPT_DIR/commands/redline.md"
-COMMAND_TARGET_PATH="$COMMANDS_DIR/redline.md"
+CLAUDE_ROOT_DIR="$HOME/.claude"
+CLAUDE_COMMANDS_DIR="$CLAUDE_ROOT_DIR/commands"
+CLAUDE_COMMAND_TARGET_PATH="$CLAUDE_COMMANDS_DIR/redline.md"
+CODEX_ROOT_DIR="$HOME/.codex"
+CODEX_PROMPTS_DIR="$CODEX_ROOT_DIR/prompts"
+CODEX_COMMAND_TARGET_PATH="$CODEX_PROMPTS_DIR/redline.md"
 NODE_BIN_PATH="$(command -v node || true)"
 
 if [[ ! -f "$HOST_TEMPLATE_PATH" ]]; then
@@ -119,18 +104,13 @@ if [[ -z "$NODE_BIN_PATH" ]]; then
   exit 1
 fi
 
-if [[ -n "$INSTALL_COMMAND_TARGET" && ! -f "$COMMAND_SOURCE_PATH" ]]; then
+if [[ "$INSTALL_COMMANDS" == "true" && ! -f "$COMMAND_SOURCE_PATH" ]]; then
   echo "Missing command template: $COMMAND_SOURCE_PATH" >&2
   exit 1
 fi
 
 mkdir -p "$NATIVE_HOST_DIR" "$FEEDBACK_DIR"
 chmod 700 "$FEEDBACK_DIR"
-
-if [[ -n "$INSTALL_COMMAND_TARGET" ]]; then
-  mkdir -p "$COMMANDS_DIR"
-  chmod 700 "$COMMANDS_DIR"
-fi
 
 chmod +x "$HOST_SCRIPT_PATH"
 "$NODE_BIN_PATH" --check "$HOST_SCRIPT_PATH" >/dev/null
@@ -151,18 +131,40 @@ manifest.allowed_origins = [`chrome-extension://${extensionId}/`];
 fs.writeFileSync(targetPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 NODE
 
-if [[ -n "$INSTALL_COMMAND_TARGET" ]]; then
-  cp "$COMMAND_SOURCE_PATH" "$COMMAND_TARGET_PATH"
-fi
-
 if [[ ! -f "$HOST_MANIFEST_PATH" ]]; then
   echo "Failed to create host manifest at $HOST_MANIFEST_PATH" >&2
   exit 1
 fi
 
-if [[ -n "$INSTALL_COMMAND_TARGET" && ! -f "$COMMAND_TARGET_PATH" ]]; then
-  echo "Failed to install command file at $COMMAND_TARGET_PATH" >&2
-  exit 1
+COMMAND_INSTALL_SUMMARY="  (skipped)"
+if [[ "$INSTALL_COMMANDS" == "true" ]]; then
+  COMMAND_INSTALL_SUMMARY=""
+
+  if [[ -d "$CLAUDE_ROOT_DIR" ]]; then
+    mkdir -p "$CLAUDE_COMMANDS_DIR"
+    chmod 700 "$CLAUDE_COMMANDS_DIR"
+    cp "$COMMAND_SOURCE_PATH" "$CLAUDE_COMMAND_TARGET_PATH"
+    if [[ ! -f "$CLAUDE_COMMAND_TARGET_PATH" ]]; then
+      echo "Failed to install Claude command at $CLAUDE_COMMAND_TARGET_PATH" >&2
+      exit 1
+    fi
+    COMMAND_INSTALL_SUMMARY="${COMMAND_INSTALL_SUMMARY}  $CLAUDE_COMMAND_TARGET_PATH (claude)"$'\n'
+  else
+    COMMAND_INSTALL_SUMMARY="${COMMAND_INSTALL_SUMMARY}  (claude skipped: $CLAUDE_ROOT_DIR not found)"$'\n'
+  fi
+
+  if [[ -d "$CODEX_ROOT_DIR" ]]; then
+    mkdir -p "$CODEX_PROMPTS_DIR"
+    chmod 700 "$CODEX_PROMPTS_DIR"
+    cp "$COMMAND_SOURCE_PATH" "$CODEX_COMMAND_TARGET_PATH"
+    if [[ ! -f "$CODEX_COMMAND_TARGET_PATH" ]]; then
+      echo "Failed to install Codex prompt at $CODEX_COMMAND_TARGET_PATH" >&2
+      exit 1
+    fi
+    COMMAND_INSTALL_SUMMARY="${COMMAND_INSTALL_SUMMARY}  $CODEX_COMMAND_TARGET_PATH (codex)"
+  else
+    COMMAND_INSTALL_SUMMARY="${COMMAND_INSTALL_SUMMARY}  (codex skipped: $CODEX_ROOT_DIR not found)"
+  fi
 fi
 
 "$NODE_BIN_PATH" -e '
@@ -188,7 +190,7 @@ Feedback directory:
   $FEEDBACK_DIR
 
 Installed command:
-  $(if [[ -n "$INSTALL_COMMAND_TARGET" ]]; then printf '%s (%s)' "$COMMAND_TARGET_PATH" "$INSTALL_COMMAND_TARGET"; else printf '%s' "(skipped)"; fi)
+$COMMAND_INSTALL_SUMMARY
 
 Next:
   1. Load this directory as an unpacked extension in chrome://extensions

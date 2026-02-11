@@ -152,6 +152,18 @@ function dispatchMouse(target, window, type, x, y, extra = {}) {
   );
 }
 
+async function waitForCondition(predicate, attempts = 20) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (predicate()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  throw new Error("Condition was not met within allotted attempts.");
+}
+
 test("toggle message creates and removes overlay UI", async () => {
   const harness = setupContentHarness();
 
@@ -245,11 +257,50 @@ test("send action hides toolbar while request is pending and restores after call
     assert.equal(sendButton.disabled, true);
     assert.equal(pending.length, 1);
     assert.equal(pending[0].message.type, "redline:capture");
+    assert.equal(pending[0].message.metadata.captureMode, "annotated");
 
     pending[0].callback({ success: true, path: "/tmp/mock.png" });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(toolbar.classList.contains("rl-hidden"), false);
+    assert.equal(sendButton.disabled, false);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("save-tab action hides redline UI while request is pending and restores after callback", async () => {
+  const pending = [];
+  const harness = setupContentHarness({
+    onSendMessage(message, callback) {
+      pending.push({ message, callback });
+    },
+  });
+
+  try {
+    await harness.toggleAnnotation();
+
+    const root = harness.document.querySelector("#rl-root");
+    const sendButton = harness.document.querySelector("button[data-action='send']");
+    const saveTabButton = harness.document.querySelector("button[data-action='save-tab']");
+    assert.ok(root);
+    assert.ok(sendButton);
+    assert.ok(saveTabButton);
+
+    saveTabButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+    await waitForCondition(() => pending.length === 1);
+
+    assert.equal(root.classList.contains("rl-capture-hidden"), true);
+    assert.equal(saveTabButton.disabled, true);
+    assert.equal(sendButton.disabled, true);
+    assert.equal(pending[0].message.type, "redline:capture");
+    assert.equal(pending[0].message.metadata.captureMode, "tab");
+
+    pending[0].callback({ success: true, path: "/tmp/mock-tab.png" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(root.classList.contains("rl-capture-hidden"), false);
+    assert.equal(saveTabButton.disabled, false);
     assert.equal(sendButton.disabled, false);
   } finally {
     harness.cleanup();

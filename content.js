@@ -17,6 +17,7 @@ function bootstrapRedline() {
     overlayElement: null,
     toolbarElement: null,
     sendButtonElement: null,
+    saveTabButtonElement: null,
     toastElement: null,
     annotations: new Set(),
     activeRectangle: null,
@@ -94,6 +95,7 @@ function bootstrapRedline() {
     state.overlayElement = null;
     state.toolbarElement = null;
     state.sendButtonElement = null;
+    state.saveTabButtonElement = null;
     state.toastElement = null;
     state.annotations.clear();
     state.activeRectangle = null;
@@ -108,7 +110,8 @@ function bootstrapRedline() {
       <button type="button" data-action="tool-rectangle">Rectangle</button>
       <button type="button" data-action="tool-text">Text</button>
       <button type="button" data-action="clear">Clear</button>
-      <button type="button" data-action="send">Send</button>
+      <button type="button" data-action="send">Save</button>
+      <button type="button" data-action="save-tab">Save Tab</button>
     `;
 
     toolbar.addEventListener("click", (event) => {
@@ -135,11 +138,17 @@ function bootstrapRedline() {
       }
 
       if (action === "send") {
-        void sendCapture();
+        void saveAnnotatedCapture();
+        return;
+      }
+
+      if (action === "save-tab") {
+        void saveWholeTabCapture();
       }
     });
 
     state.sendButtonElement = toolbar.querySelector("button[data-action='send']");
+    state.saveTabButtonElement = toolbar.querySelector("button[data-action='save-tab']");
     return toolbar;
   }
 
@@ -339,15 +348,36 @@ function bootstrapRedline() {
     state.activeRectangle = null;
   }
 
-  async function sendCapture() {
+  async function saveAnnotatedCapture() {
+    await captureScreenshot({
+      mode: "annotated",
+      hideRootForCapture: false,
+      successPrefix: "Saved annotation",
+    });
+  }
+
+  async function saveWholeTabCapture() {
+    await captureScreenshot({
+      mode: "tab",
+      hideRootForCapture: true,
+      successPrefix: "Saved tab screenshot",
+    });
+  }
+
+  async function captureScreenshot({ mode, hideRootForCapture, successPrefix }) {
     if (state.isSending) {
       return;
     }
 
     state.isSending = true;
-    state.toolbarElement?.classList.add("rl-hidden");
-    if (state.sendButtonElement instanceof HTMLButtonElement) {
-      state.sendButtonElement.disabled = true;
+    const rootWasHidden = state.rootElement?.classList.contains("rl-capture-hidden") ?? false;
+    setCaptureButtonsDisabled(true);
+
+    if (hideRootForCapture) {
+      state.rootElement?.classList.add("rl-capture-hidden");
+      await waitForVisualFrame();
+    } else {
+      state.toolbarElement?.classList.add("rl-hidden");
     }
 
     try {
@@ -356,6 +386,7 @@ function bootstrapRedline() {
         metadata: {
           url: window.location.href,
           timestamp: new Date().toISOString(),
+          captureMode: mode,
         },
       });
 
@@ -363,17 +394,39 @@ function bootstrapRedline() {
         throw new Error(response?.error ?? "Capture failed");
       }
 
-      showToast(`Saved annotation to ${response.path}`);
+      showToast(`${successPrefix} to ${response.path}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send capture";
       showToast(message, true);
     } finally {
-      if (state.sendButtonElement instanceof HTMLButtonElement) {
-        state.sendButtonElement.disabled = false;
+      if (!rootWasHidden) {
+        state.rootElement?.classList.remove("rl-capture-hidden");
       }
+      setCaptureButtonsDisabled(false);
       state.toolbarElement?.classList.remove("rl-hidden");
       state.isSending = false;
     }
+  }
+
+  function setCaptureButtonsDisabled(isDisabled) {
+    if (state.sendButtonElement instanceof HTMLButtonElement) {
+      state.sendButtonElement.disabled = isDisabled;
+    }
+
+    if (state.saveTabButtonElement instanceof HTMLButtonElement) {
+      state.saveTabButtonElement.disabled = isDisabled;
+    }
+  }
+
+  function waitForVisualFrame() {
+    return new Promise((resolve) => {
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => resolve());
+        return;
+      }
+
+      window.setTimeout(resolve, 0);
+    });
   }
 
   function sendRuntimeMessage(message) {

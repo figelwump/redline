@@ -35,6 +35,8 @@ test("saveFeedbackMessage writes PNG and latest metadata", () => {
     assert.equal(result.success, true);
     assert.equal(path.dirname(result.path), feedbackDir);
     assert.equal(fs.existsSync(result.path), true);
+    const outputPng = fs.readFileSync(result.path);
+    assert.equal(outputPng.toString("hex", 0, 4), "89504e47");
 
     const latestPath = path.join(feedbackDir, "latest.json");
     assert.equal(fs.existsSync(latestPath), true);
@@ -43,6 +45,25 @@ test("saveFeedbackMessage writes PNG and latest metadata", () => {
     assert.equal(latestMetadata.path, result.path);
     assert.equal(latestMetadata.url, "http://localhost:3000");
     assert.equal(latestMetadata.timestamp, "2026-02-11T10:20:30.123Z");
+  });
+});
+
+test("saveFeedbackMessage supports missing metadata with fallback values", () => {
+  withTempDir((feedbackDir) => {
+    const result = saveFeedbackMessage(
+      {
+        action: "save",
+        dataUrl: FIXTURE_PNG,
+      },
+      { feedbackDir }
+    );
+
+    const latestPath = path.join(feedbackDir, "latest.json");
+    const latestMetadata = JSON.parse(fs.readFileSync(latestPath, "utf8"));
+    assert.equal(latestMetadata.path, result.path);
+    assert.equal(latestMetadata.url, null);
+    assert.equal(typeof latestMetadata.timestamp, "string");
+    assert.notEqual(latestMetadata.timestamp.length, 0);
   });
 });
 

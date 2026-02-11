@@ -39,13 +39,20 @@ test("decodeNativeMessages leaves incomplete payload in remaining buffer", () =>
   assert.equal(resumed.remaining.length, 0);
 });
 
-test("decodeNativeMessages rejects invalid framed message length", () => {
+test("decodeNativeMessages rejects oversized message length", () => {
   const header = Buffer.alloc(4);
   header.writeUInt32LE(MAX_NATIVE_MESSAGE_BYTES + 1, 0);
   const payload = Buffer.from("{}", "utf8");
   const invalidFrame = Buffer.concat([header, payload]);
 
   assert.throws(() => decodeNativeMessages(invalidFrame), /Invalid native message length/);
+});
+
+test("decodeNativeMessages rejects zero-length framed payload", () => {
+  const header = Buffer.alloc(4);
+  header.writeUInt32LE(0, 0);
+
+  assert.throws(() => decodeNativeMessages(header), /Invalid native message length/);
 });
 
 test("decodeNativeMessages rejects malformed JSON payload", () => {

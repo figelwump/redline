@@ -83,10 +83,16 @@
 
 #rl-toolbar button[data-action="send"] {
   min-width: 60px;
+  color: #ffffff;
+  background: #16a34a;
 }
 
 #rl-toolbar button:hover {
   background: rgba(255, 255, 255, 0.14);
+}
+
+#rl-toolbar button[data-action="send"]:hover {
+  background: #15803d;
 }
 
 #rl-toolbar button:disabled {

@@ -8,6 +8,7 @@ if (!window[REDLINE_FLAG]) {
 function bootstrapRedline() {
   const TOOL_RECTANGLE = "rectangle";
   const TOOL_TEXT = "text";
+  const TEXT_PILL_MAX_CHARS = 280;
 
   const state = {
     annotationMode: false,
@@ -77,6 +78,8 @@ function bootstrapRedline() {
     }
 
     document.removeEventListener("keydown", onDocumentKeyDown, true);
+    window.clearTimeout(showToast.timeoutId);
+    showToast.timeoutId = 0;
 
     if (state.overlayElement) {
       state.overlayElement.removeEventListener("mousedown", onOverlayMouseDown);
@@ -259,6 +262,15 @@ function bootstrapRedline() {
     pill.spellcheck = false;
     pill.textContent = "";
     pill.setAttribute("aria-label", "Feedback callout text");
+    pill.addEventListener("input", () => {
+      const content = pill.textContent ?? "";
+      if (content.length <= TEXT_PILL_MAX_CHARS) {
+        return;
+      }
+
+      pill.textContent = content.slice(0, TEXT_PILL_MAX_CHARS);
+      placeCursorAtEnd(pill);
+    });
 
     const commit = () => {
       pill.contentEditable = "false";
@@ -286,8 +298,7 @@ function bootstrapRedline() {
     focusEditable(pill);
   }
 
-  function focusEditable(element) {
-    element.focus();
+  function placeCursorAtEnd(element) {
     const selection = window.getSelection();
     if (!selection) {
       return;
@@ -298,6 +309,28 @@ function bootstrapRedline() {
     range.collapse(false);
     selection.removeAllRanges();
     selection.addRange(range);
+  }
+
+  function focusEditable(element) {
+    if (!element.parentElement) {
+      return;
+    }
+
+    element.focus();
+    const selection = window.getSelection();
+    if (!selection) {
+      return;
+    }
+
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } catch (_error) {
+      // Leave focus in place even if selection initialization fails.
+    }
   }
 
   function clearAnnotations() {

@@ -38,9 +38,20 @@ async function captureAndSave(message, sender) {
     throw new Error("Capture request did not include tab context.");
   }
 
-  const captureDataUrl = await chrome.tabs.captureVisibleTab(senderTab.windowId, {
-    format: "png",
-  });
+  let captureDataUrl;
+  try {
+    captureDataUrl = await chrome.tabs.captureVisibleTab(senderTab.windowId, {
+      format: "png",
+    });
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown failure while capturing the visible tab.";
+    throw new Error(`Failed to capture visible tab: ${errorMessage}`);
+  }
+
+  if (typeof captureDataUrl !== "string" || !captureDataUrl.startsWith("data:image/png")) {
+    throw new Error("Screenshot capture returned an invalid PNG payload.");
+  }
 
   const metadata = {
     ...(message?.metadata ?? {}),

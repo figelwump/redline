@@ -201,6 +201,16 @@ function bootstrapRedline() {
   }
 
   function onDocumentKeyDown(event) {
+    const toastActionButton = getVisibleToastActionButton();
+    if (toastActionButton && (event.key === "Enter" || event.key === "Escape")) {
+      if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+        toastActionButton.click();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+
     if (event.key === "Escape") {
       if (state.focusedAnnotationId !== null) {
         removeAnnotation(state.focusedAnnotationId);
@@ -730,6 +740,19 @@ function bootstrapRedline() {
 
   function hideToast() {
     state.toastElement?.classList.remove("rl-visible", "rl-error", "rl-has-action");
+  }
+
+  function getVisibleToastActionButton() {
+    if (!state.toastElement || !state.toastElement.classList.contains("rl-visible")) {
+      return null;
+    }
+
+    const button = state.toastElement.querySelector(".rl-toast-action");
+    if (!(button instanceof HTMLButtonElement)) {
+      return null;
+    }
+
+    return button;
   }
 
   function positionToastUnderToolbar() {

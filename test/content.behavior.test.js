@@ -341,6 +341,70 @@ test("send action shows success toast with done button that clears and hides UI"
   }
 });
 
+test("success toast dismisses on Enter key", async () => {
+  const pending = [];
+  const harness = setupContentHarness({
+    onSendMessage(message, callback) {
+      pending.push({ message, callback });
+    },
+  });
+
+  try {
+    await harness.toggleAnnotation();
+
+    const sendButton = harness.document.querySelector("button[data-action='send']");
+    const toast = harness.document.querySelector("#rl-toast");
+    assert.ok(sendButton);
+    assert.ok(toast);
+
+    sendButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+    assert.equal(pending.length, 1);
+    pending[0].callback({ success: true, path: "/tmp/mock.png" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    assert.equal(toast.classList.contains("rl-visible"), true);
+    assert.ok(toast.querySelector(".rl-toast-action"));
+
+    dispatchKey(harness.document, harness.window, "Enter");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(harness.document.querySelector("#rl-root"), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("success toast dismisses on Escape key", async () => {
+  const pending = [];
+  const harness = setupContentHarness({
+    onSendMessage(message, callback) {
+      pending.push({ message, callback });
+    },
+  });
+
+  try {
+    await harness.toggleAnnotation();
+
+    const sendButton = harness.document.querySelector("button[data-action='send']");
+    const toast = harness.document.querySelector("#rl-toast");
+    assert.ok(sendButton);
+    assert.ok(toast);
+
+    sendButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+    assert.equal(pending.length, 1);
+    pending[0].callback({ success: true, path: "/tmp/mock.png" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    assert.equal(toast.classList.contains("rl-visible"), true);
+    assert.ok(toast.querySelector(".rl-toast-action"));
+
+    dispatchKey(harness.document, harness.window, "Escape");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(harness.document.querySelector("#rl-root"), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("save-tab control is hidden from toolbar", async () => {
   const harness = setupContentHarness();
   try {

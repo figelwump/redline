@@ -50,10 +50,12 @@
 
 #rl-toolbar button {
   all: unset;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 10px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 8px;
   color: #f2f3f5;
   font-size: 12px;

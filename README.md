@@ -60,7 +60,7 @@ Install behavior:
 - `r`: rectangle tool
 - `t`: text tool
 - `x`: clear annotations
-- `Shift+Enter`: send capture
+- `Cmd+Enter`: send capture
 - `Escape`: remove focused annotation, then exit annotation mode
 
 ## Development

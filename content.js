@@ -137,7 +137,7 @@ function bootstrapRedline() {
       </div>
       <div class="rl-toolbar-control">
         <button type="button" data-action="send">Send</button>
-        <span class="rl-toolbar-hint">shift+enter</span>
+        <span class="rl-toolbar-hint">cmd+enter</span>
       </div>
     `;
 
@@ -230,14 +230,14 @@ function bootstrapRedline() {
       return;
     }
 
-    if (event.metaKey || event.ctrlKey || event.altKey) {
-      return;
-    }
-
-    if (event.key === "Enter" && event.shiftKey) {
+    if (event.key === "Enter" && event.metaKey && !event.ctrlKey && !event.altKey) {
       void saveAnnotatedCapture();
       event.preventDefault();
       event.stopPropagation();
+      return;
+    }
+
+    if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
 

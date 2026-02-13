@@ -426,7 +426,7 @@ test("toolbar renders keyboard shortcut hints", async () => {
     const hints = Array.from(harness.document.querySelectorAll(".rl-toolbar-hint")).map((node) =>
       node.textContent?.trim()
     );
-    assert.deepEqual(hints, ["r", "t", "x", "shift+enter"]);
+    assert.deepEqual(hints, ["r", "t", "x", "cmd+enter"]);
   } finally {
     harness.cleanup();
   }
@@ -454,7 +454,7 @@ test("keyboard shortcuts switch tools and send", async () => {
     dispatchKey(harness.document, harness.window, "r");
     assert.equal(rectangleButton.classList.contains("rl-active"), true);
 
-    dispatchKey(harness.document, harness.window, "Enter", { shiftKey: true });
+    dispatchKey(harness.document, harness.window, "Enter", { metaKey: true });
     assert.equal(pending.length, 1);
     assert.equal(pending[0].message.type, "redline:capture");
     assert.equal(pending[0].message.metadata.captureMode, "annotated");
@@ -516,7 +516,7 @@ test("shortcuts are ignored while editing text pill", async () => {
   }
 });
 
-test("shift+enter sends while editing text pill", async () => {
+test("cmd+enter sends while editing text pill", async () => {
   const pending = [];
   const harness = setupContentHarness({
     onSendMessage(message, callback) {
@@ -538,7 +538,7 @@ test("shift+enter sends while editing text pill", async () => {
     assert.ok(pill);
     assert.equal(pill.contentEditable, "true");
 
-    dispatchKey(pill, harness.window, "Enter", { shiftKey: true });
+    dispatchKey(pill, harness.window, "Enter", { metaKey: true });
     assert.equal(pending.length, 1);
     assert.equal(pending[0].message.type, "redline:capture");
     assert.equal(pending[0].message.metadata.captureMode, "annotated");

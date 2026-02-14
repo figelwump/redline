@@ -201,6 +201,20 @@ function bootstrapRedline() {
   }
 
   function onDocumentKeyDown(event) {
+    if (event.key === "Escape") {
+      const editingPill = getFocusedEditingTextPill(event.target);
+      if (editingPill) {
+        const annotationId = getAnnotationIdFromTarget(editingPill);
+        if (annotationId !== null) {
+          removeAnnotation(annotationId);
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+
     const toastActionButton = getVisibleToastActionButton();
     if (toastActionButton && (event.key === "Enter" || event.key === "Escape")) {
       if (!event.metaKey && !event.ctrlKey && !event.altKey) {
@@ -212,13 +226,6 @@ function bootstrapRedline() {
     }
 
     if (event.key === "Escape") {
-      if (state.focusedAnnotationId !== null) {
-        removeAnnotation(state.focusedAnnotationId);
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
       clearAnnotations();
       teardownAnnotationMode();
       event.preventDefault();
@@ -350,6 +357,17 @@ function bootstrapRedline() {
 
     const focusedId = getAnnotationIdFromTarget(event.target);
     if (focusedId !== null) {
+      const annotation = state.annotations.get(focusedId);
+      if (annotation?.rectElement && !annotation.textWrapper) {
+        createTextAnnotation(event.clientX, event.clientY, { annotationId: focusedId });
+        return;
+      }
+
+      if (isTextPillClickTarget(event.target, annotation?.textPill ?? null)) {
+        beginTextPillEditing(annotation);
+        return;
+      }
+
       setFocusedAnnotation(focusedId);
       return;
     }
@@ -387,8 +405,8 @@ function bootstrapRedline() {
 
     const pill = document.createElement("div");
     pill.className = "rl-text-pill";
-    pill.contentEditable = "true";
-    pill.setAttribute("contenteditable", "true");
+    pill.contentEditable = "false";
+    pill.setAttribute("contenteditable", "false");
     pill.spellcheck = false;
     pill.textContent = "";
     pill.setAttribute("aria-label", "Feedback callout text");
@@ -402,26 +420,12 @@ function bootstrapRedline() {
       placeCursorAtEnd(pill);
     });
 
-    const commit = () => {
-      pill.contentEditable = "false";
-      if (!pill.textContent?.trim()) {
-        if (annotation.rectElement) {
-          detachTextFromAnnotation(annotation.id);
-          return;
-        }
-
-        removeAnnotation(annotation.id);
-      }
-    };
-
     pill.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
         pill.blur();
       }
     });
-
-    pill.addEventListener("blur", commit, { once: true });
 
     wrapper.appendChild(dot);
     wrapper.appendChild(connector);
@@ -432,6 +436,49 @@ function bootstrapRedline() {
     annotation.textPill = pill;
     wrapper.addEventListener("mousedown", () => setFocusedAnnotation(annotation.id));
     pill.addEventListener("focus", () => setFocusedAnnotation(annotation.id));
+    setFocusedAnnotation(annotation.id);
+    beginTextPillEditing(annotation);
+  }
+
+  function isTextPillClickTarget(target, pill) {
+    if (!pill || !(target instanceof Element)) {
+      return false;
+    }
+
+    return target.closest(".rl-text-pill") === pill;
+  }
+
+  function beginTextPillEditing(annotation) {
+    if (!annotation?.textPill) {
+      return;
+    }
+
+    const pill = annotation.textPill;
+    if (pill.dataset.rlEditing === "true") {
+      setFocusedAnnotation(annotation.id);
+      focusEditable(pill);
+      return;
+    }
+
+    pill.dataset.rlEditing = "true";
+    pill.contentEditable = "true";
+    pill.setAttribute("contenteditable", "true");
+
+    const commit = () => {
+      pill.dataset.rlEditing = "false";
+      pill.contentEditable = "false";
+      pill.setAttribute("contenteditable", "false");
+      if (!pill.textContent?.trim()) {
+        if (annotation.rectElement) {
+          detachTextFromAnnotation(annotation.id);
+          return;
+        }
+
+        removeAnnotation(annotation.id);
+      }
+    };
+
+    pill.addEventListener("blur", commit, { once: true });
     setFocusedAnnotation(annotation.id);
     focusEditable(pill);
   }
@@ -602,6 +649,28 @@ function bootstrapRedline() {
     }
 
     return parsed;
+  }
+
+  function getFocusedEditingTextPill(target) {
+    const candidates = [target, document.activeElement];
+
+    for (const candidate of candidates) {
+      if (!(candidate instanceof Element)) {
+        continue;
+      }
+
+      const pill = candidate.closest(".rl-text-pill");
+      if (!pill || !(pill instanceof HTMLElement)) {
+        continue;
+      }
+
+      const isEditing = pill.contentEditable === "true" || pill.isContentEditable;
+      if (pill.dataset.rlEditing === "true" && isEditing) {
+        return pill;
+      }
+    }
+
+    return null;
   }
 
   function isEditableKeyboardTarget(target) {

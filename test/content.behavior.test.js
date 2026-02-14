@@ -272,6 +272,74 @@ test("text tool creates dot/connector/pill and commits on Enter", async () => {
   }
 });
 
+test("text tool click on existing rectangle re-adds text pill", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 140, 90);
+    dispatchMouse(overlay, harness.window, "mouseup", 140, 90);
+
+    const initialPill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(initialPill);
+    initialPill.textContent = "";
+    initialPill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+
+    const rectangle = harness.document.querySelector(".rl-rect-annotation");
+    assert.ok(rectangle);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 0);
+
+    const textButton = harness.document.querySelector("button[data-action='tool-text']");
+    assert.ok(textButton);
+    textButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+
+    dispatchMouse(rectangle, harness.window, "click", 80, 55);
+
+    const textAnnotations = harness.document.querySelectorAll(".rl-text-annotation");
+    assert.equal(textAnnotations.length, 1);
+    const newPill = textAnnotations[0].querySelector(".rl-text-pill");
+    assert.ok(newPill);
+    assert.equal(newPill.contentEditable, "true");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("text tool click inside existing pill reopens editing", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 30, 30, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 150, 95);
+    dispatchMouse(overlay, harness.window, "mouseup", 150, 95);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    pill.textContent = "Editable note";
+    pill.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+    assert.equal(pill.contentEditable, "false");
+
+    const textButton = harness.document.querySelector("button[data-action='tool-text']");
+    assert.ok(textButton);
+    textButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+
+    dispatchMouse(pill, harness.window, "click", 90, 70);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 1);
+    assert.equal(pill.contentEditable, "true");
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("clicking inside icon SVG switches tool state", async () => {
   const harness = setupContentHarness();
 
@@ -547,7 +615,7 @@ test("cmd+enter sends while editing text pill", async () => {
   }
 });
 
-test("escape removes focused annotation before hiding app", async () => {
+test("escape clears focused text-pill annotation before hiding app", async () => {
   const harness = setupContentHarness();
 
   try {
@@ -561,14 +629,49 @@ test("escape removes focused annotation before hiding app", async () => {
 
     assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 1);
     assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 1);
+    assert.ok(harness.document.activeElement?.classList.contains("rl-text-pill"));
 
     harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    assert.ok(harness.document.querySelector("#rl-overlay"));
     assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 0);
     assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 0);
+    assert.ok(harness.document.querySelector("#rl-overlay"));
 
     harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     assert.equal(harness.document.querySelector("#rl-overlay"), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("escape while editing a pill clears only the focused annotation", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
+
+    const firstPill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(firstPill);
+    firstPill.textContent = "first";
+    firstPill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+
+    dispatchMouse(overlay, harness.window, "mousedown", 140, 100, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 220, 160);
+    dispatchMouse(overlay, harness.window, "mouseup", 220, 160);
+
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 2);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 2);
+    assert.ok(harness.document.activeElement?.classList.contains("rl-text-pill"));
+
+    harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 1);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 1);
+    assert.ok(harness.document.querySelector("#rl-overlay"));
   } finally {
     harness.cleanup();
   }

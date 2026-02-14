@@ -19,5 +19,14 @@
       "32": "icons/icon32.png"
     },
     "default_title": "Toggle Redline Annotation"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Toggle Redline annotation mode"
+    }
   }
 }

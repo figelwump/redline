@@ -8,7 +8,6 @@ if (!window[REDLINE_FLAG]) {
 function bootstrapRedline() {
   const TOOL_RECTANGLE = "rectangle";
   const TOOL_TEXT = "text";
-  const TEXT_PILL_MAX_CHARS = 280;
 
   const state = {
     annotationMode: false,
@@ -518,18 +517,9 @@ function bootstrapRedline() {
     pill.spellcheck = false;
     pill.textContent = "";
     pill.setAttribute("aria-label", "Feedback callout text");
-    pill.addEventListener("input", () => {
-      const content = pill.textContent ?? "";
-      if (content.length <= TEXT_PILL_MAX_CHARS) {
-        return;
-      }
-
-      pill.textContent = content.slice(0, TEXT_PILL_MAX_CHARS);
-      placeCursorAtEnd(pill);
-    });
 
     pill.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         pill.blur();
       }
@@ -543,6 +533,15 @@ function bootstrapRedline() {
     attachElementToAnnotation(annotation.id, wrapper, "text");
     annotation.textPill = pill;
     wrapper.addEventListener("mousedown", () => setFocusedAnnotation(annotation.id));
+    pill.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      event.stopPropagation();
+      setFocusedAnnotation(annotation.id);
+      beginTextPillEditing(annotation);
+    });
     pill.addEventListener("focus", () => setFocusedAnnotation(annotation.id));
     setFocusedAnnotation(annotation.id);
     beginTextPillEditing(annotation);
@@ -564,7 +563,6 @@ function bootstrapRedline() {
     const pill = annotation.textPill;
     if (pill.dataset.rlEditing === "true") {
       setFocusedAnnotation(annotation.id);
-      focusEditable(pill);
       return;
     }
 
@@ -589,19 +587,6 @@ function bootstrapRedline() {
     pill.addEventListener("blur", commit, { once: true });
     setFocusedAnnotation(annotation.id);
     focusEditable(pill);
-  }
-
-  function placeCursorAtEnd(element) {
-    const selection = window.getSelection();
-    if (!selection) {
-      return;
-    }
-
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
   }
 
   function focusEditable(element) {

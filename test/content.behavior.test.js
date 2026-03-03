@@ -210,6 +210,33 @@ test("toggle message creates and removes overlay UI", async () => {
   }
 });
 
+test("toolbar can be dragged to a new position", async () => {
+  const harness = setupContentHarness();
+
+  try {
+    await harness.toggleAnnotation();
+
+    const toolbar = harness.document.querySelector("#rl-toolbar");
+    assert.ok(toolbar);
+    const rect = toolbar.getBoundingClientRect();
+    const startX = rect.left + 10;
+    const startY = rect.top + 10;
+
+    dispatchMouse(toolbar, harness.window, "mousedown", startX, startY, { button: 0 });
+    dispatchMouse(harness.document, harness.window, "mousemove", 240, 180, { buttons: 1 });
+    dispatchMouse(harness.document, harness.window, "mouseup", 240, 180, { button: 0 });
+
+    assert.equal(toolbar.classList.contains("rl-dragging"), false);
+    assert.notEqual(toolbar.style.left, "");
+    assert.notEqual(toolbar.style.top, "");
+    assert.equal(toolbar.style.left, "230px");
+    assert.equal(toolbar.style.top, "170px");
+    assert.equal(toolbar.style.right, "auto");
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("rectangle tool creates finalized rectangle and centered text pill", async () => {
   const harness = setupContentHarness();
 

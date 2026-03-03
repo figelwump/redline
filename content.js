@@ -23,6 +23,8 @@ function bootstrapRedline() {
     nextAnnotationId: 1,
     focusedAnnotationId: null,
     activeRectangle: null,
+    toolbarDrag: null,
+    toolbarHasCustomPosition: false,
     isSending: false,
   };
 
@@ -69,6 +71,7 @@ function bootstrapRedline() {
     state.rootElement.appendChild(state.toastElement);
     document.documentElement.appendChild(state.rootElement);
 
+    window.addEventListener("resize", onWindowResize);
     document.addEventListener("keydown", onDocumentKeyDown, true);
     state.annotationMode = true;
     setTool(TOOL_RECTANGLE);
@@ -81,8 +84,10 @@ function bootstrapRedline() {
     }
 
     document.removeEventListener("keydown", onDocumentKeyDown, true);
+    window.removeEventListener("resize", onWindowResize);
     window.clearTimeout(showToast.timeoutId);
     showToast.timeoutId = 0;
+    endToolbarDrag();
 
     if (state.overlayElement) {
       state.overlayElement.removeEventListener("mousedown", onOverlayMouseDown);
@@ -90,6 +95,10 @@ function bootstrapRedline() {
       state.overlayElement.removeEventListener("mouseup", onOverlayMouseUp);
       state.overlayElement.removeEventListener("click", onOverlayClick);
       state.overlayElement.removeEventListener("wheel", onOverlayWheel);
+    }
+
+    if (state.toolbarElement) {
+      state.toolbarElement.removeEventListener("mousedown", onToolbarMouseDown);
     }
 
     state.rootElement?.remove();
@@ -102,6 +111,7 @@ function bootstrapRedline() {
     state.annotations.clear();
     state.focusedAnnotationId = null;
     state.activeRectangle = null;
+    state.toolbarHasCustomPosition = false;
     state.currentTool = TOOL_RECTANGLE;
     state.annotationMode = false;
   }
@@ -141,6 +151,7 @@ function bootstrapRedline() {
       </div>
     `;
 
+    toolbar.addEventListener("mousedown", onToolbarMouseDown);
     toolbar.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof Element)) {
@@ -182,6 +193,103 @@ function bootstrapRedline() {
     state.sendButtonElement = toolbar.querySelector("button[data-action='send']");
     state.saveTabButtonElement = toolbar.querySelector("button[data-action='save-tab']");
     return toolbar;
+  }
+
+  function onWindowResize() {
+    if (!state.toolbarElement || !state.toolbarHasCustomPosition) {
+      return;
+    }
+
+    const left = Number.parseFloat(state.toolbarElement.style.left);
+    const top = Number.parseFloat(state.toolbarElement.style.top);
+    if (!Number.isFinite(left) || !Number.isFinite(top)) {
+      return;
+    }
+
+    setToolbarPosition(left, top);
+  }
+
+  function onToolbarMouseDown(event) {
+    if (!state.toolbarElement || event.button !== 0) {
+      return;
+    }
+
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    if (event.target.closest("button[data-action]")) {
+      return;
+    }
+
+    const rect = state.toolbarElement.getBoundingClientRect();
+    if (!state.toolbarHasCustomPosition) {
+      state.toolbarElement.style.left = `${Math.round(rect.left)}px`;
+      state.toolbarElement.style.top = `${Math.round(rect.top)}px`;
+      state.toolbarElement.style.right = "auto";
+      state.toolbarElement.style.bottom = "auto";
+      state.toolbarHasCustomPosition = true;
+    }
+
+    state.toolbarDrag = {
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
+
+    state.toolbarElement.classList.add("rl-dragging");
+    document.addEventListener("mousemove", onToolbarMouseMove, true);
+    document.addEventListener("mouseup", onToolbarMouseUp, true);
+    window.addEventListener("blur", onToolbarMouseUp, true);
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function onToolbarMouseMove(event) {
+    if (!state.toolbarDrag) {
+      return;
+    }
+
+    if (event.buttons === 0) {
+      endToolbarDrag();
+      return;
+    }
+
+    setToolbarPosition(event.clientX - state.toolbarDrag.offsetX, event.clientY - state.toolbarDrag.offsetY);
+  }
+
+  function onToolbarMouseUp() {
+    endToolbarDrag();
+  }
+
+  function endToolbarDrag() {
+    state.toolbarDrag = null;
+    document.removeEventListener("mousemove", onToolbarMouseMove, true);
+    document.removeEventListener("mouseup", onToolbarMouseUp, true);
+    window.removeEventListener("blur", onToolbarMouseUp, true);
+    state.toolbarElement?.classList.remove("rl-dragging");
+  }
+
+  function setToolbarPosition(left, top) {
+    if (!state.toolbarElement) {
+      return;
+    }
+
+    const rect = state.toolbarElement.getBoundingClientRect();
+    const maxLeft = Math.max(0, window.innerWidth - rect.width);
+    const maxTop = Math.max(0, window.innerHeight - rect.height);
+    const clampedLeft = clamp(left, 0, maxLeft);
+    const clampedTop = clamp(top, 0, maxTop);
+
+    state.toolbarElement.style.left = `${Math.round(clampedLeft)}px`;
+    state.toolbarElement.style.top = `${Math.round(clampedTop)}px`;
+
+    if (state.toastElement?.classList.contains("rl-visible")) {
+      positionToastUnderToolbar();
+    }
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
   }
 
   function setTool(tool) {

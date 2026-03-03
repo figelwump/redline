@@ -29,6 +29,12 @@
   background: rgba(20, 21, 24, 0.88);
   backdrop-filter: blur(8px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+  cursor: grab;
+  user-select: none;
+}
+
+#rl-toolbar.rl-dragging {
+  cursor: grabbing;
 }
 
 #rl-toolbar .rl-toolbar-control {

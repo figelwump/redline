@@ -181,7 +181,7 @@
 .rl-text-annotation {
   position: fixed;
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   transform: translate(-5px, -5px);
 }
@@ -201,6 +201,7 @@
 .rl-text-connector {
   width: 12px;
   height: 2px;
+  margin-top: 4px;
   background: #ff4242;
   flex: 0 0 auto;
 }

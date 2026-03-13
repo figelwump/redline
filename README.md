@@ -61,7 +61,7 @@ Install behavior:
 - `t`: text tool
 - `x`: clear annotations
 - `Cmd+Enter`: send capture
-- `Escape`: remove focused annotation, then exit annotation mode
+- `Escape`: remove focused annotation, or confirm before discarding unsent annotations and exiting annotation mode
 
 ## Development
 

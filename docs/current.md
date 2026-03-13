@@ -16,7 +16,7 @@ Primary target is local development. The repo should still be open-source friend
 4. **Rectangle tool**: click + drag to draw colored rectangles (red border, semi-transparent fill)
 5. **Text tool**: click anywhere → a red dot appears at the click point, connected by a short line to an expandable pill. The pill is editable - type your feedback, click elsewhere or press Enter to commit.
 6. **Send**: hides toolbar → captures visible tab screenshot → saves to `~/.redline/feedback/feedback-{timestamp}.png` → writes `~/.redline/feedback/latest.json` → shows confirmation toast with saved path
-7. Click extension icon again or press Escape to exit annotation mode
+7. Click extension icon again or press Escape to exit annotation mode; if there are unsent annotations, confirm before discarding them
 
 ### Key design decisions
 

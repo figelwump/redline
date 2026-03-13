@@ -25,6 +25,7 @@ function bootstrapRedline() {
     toolbarDrag: null,
     toolbarHasCustomPosition: false,
     isSending: false,
+    hasUnsentChanges: false,
   };
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -35,7 +36,7 @@ function bootstrapRedline() {
 
     if (message?.type === "redline:toggle") {
       if (state.annotationMode) {
-        teardownAnnotationMode();
+        requestAnnotationModeClose();
       } else {
         setupAnnotationMode();
       }
@@ -113,6 +114,29 @@ function bootstrapRedline() {
     state.toolbarHasCustomPosition = false;
     state.currentTool = TOOL_RECTANGLE;
     state.annotationMode = false;
+    state.hasUnsentChanges = false;
+  }
+
+  function requestAnnotationModeClose() {
+    if (!state.annotationMode) {
+      return false;
+    }
+
+    if (hasPendingAnnotations() && !window.confirm("Discard pending annotations and close Redline?")) {
+      return false;
+    }
+
+    clearAnnotations();
+    teardownAnnotationMode();
+    return true;
+  }
+
+  function hasPendingAnnotations() {
+    return state.hasUnsentChanges && state.annotations.size > 0;
+  }
+
+  function markAnnotationsPending() {
+    state.hasUnsentChanges = state.annotations.size > 0;
   }
 
   function renderToolbar() {
@@ -333,8 +357,7 @@ function bootstrapRedline() {
     }
 
     if (event.key === "Escape") {
-      clearAnnotations();
-      teardownAnnotationMode();
+      requestAnnotationModeClose();
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -544,6 +567,7 @@ function bootstrapRedline() {
     });
     pill.addEventListener("focus", () => setFocusedAnnotation(annotation.id));
     setFocusedAnnotation(annotation.id);
+    markAnnotationsPending();
     beginTextPillEditing(annotation);
   }
 
@@ -561,6 +585,7 @@ function bootstrapRedline() {
     }
 
     const pill = annotation.textPill;
+    const initialTextContent = pill.textContent ?? "";
     if (pill.dataset.rlEditing === "true") {
       setFocusedAnnotation(annotation.id);
       return;
@@ -574,6 +599,9 @@ function bootstrapRedline() {
       pill.dataset.rlEditing = "false";
       pill.contentEditable = "false";
       pill.setAttribute("contenteditable", "false");
+      if ((pill.textContent ?? "") !== initialTextContent) {
+        markAnnotationsPending();
+      }
       if (!pill.textContent?.trim()) {
         if (annotation.rectElement) {
           detachTextFromAnnotation(annotation.id);
@@ -617,6 +645,7 @@ function bootstrapRedline() {
     });
     state.focusedAnnotationId = null;
     state.activeRectangle = null;
+    markAnnotationsPending();
   }
 
   function highlightWholeTab() {
@@ -654,6 +683,7 @@ function bootstrapRedline() {
     };
     state.nextAnnotationId += 1;
     state.annotations.set(annotation.id, annotation);
+    markAnnotationsPending();
     return annotation;
   }
 
@@ -690,6 +720,8 @@ function bootstrapRedline() {
     } else if (state.focusedAnnotationId === annotationId) {
       setFocusedAnnotation(annotationId);
     }
+
+    markAnnotationsPending();
   }
 
   function removeAnnotation(annotationId) {
@@ -704,6 +736,7 @@ function bootstrapRedline() {
     if (state.focusedAnnotationId === annotationId) {
       state.focusedAnnotationId = null;
     }
+    markAnnotationsPending();
   }
 
   function setFocusedAnnotation(annotationId) {
@@ -811,12 +844,10 @@ function bootstrapRedline() {
         throw new Error(response?.error ?? "Capture failed");
       }
 
+      state.hasUnsentChanges = false;
       showToast("Successfully saved feedback. Use /redline in your agent.", {
         actionLabel: "Done",
-        onAction: () => {
-          clearAnnotations();
-          teardownAnnotationMode();
-        },
+        onAction: () => requestAnnotationModeClose(),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send capture";
@@ -878,8 +909,9 @@ function bootstrapRedline() {
       actionButton.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        hideToast();
-        onAction();
+        if (onAction() !== false) {
+          hideToast();
+        }
       });
       state.toastElement.appendChild(actionButton);
     }

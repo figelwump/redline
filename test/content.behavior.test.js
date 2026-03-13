@@ -13,6 +13,16 @@ function setupContentHarness(options = {}) {
   const { window } = dom;
   const listeners = {};
   const pendingSendCallbacks = [];
+  const confirmCalls = [];
+
+  window.confirm = (message) => {
+    confirmCalls.push(message);
+    if (typeof options.onConfirm === "function") {
+      return options.onConfirm(message, confirmCalls);
+    }
+
+    return options.confirmResult ?? true;
+  };
 
   function onSendMessage(message, callback) {
     if (typeof options.onSendMessage === "function") {
@@ -166,6 +176,7 @@ function setupContentHarness(options = {}) {
   }
 
   return {
+    confirmCalls,
     window,
     document: window.document,
     toggleAnnotation,
@@ -494,7 +505,52 @@ test("success toast dismisses on Escape key", async () => {
 
     dispatchKey(harness.document, harness.window, "Escape");
     await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(harness.confirmCalls.length, 0);
     assert.equal(harness.document.querySelector("#rl-root"), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("success toast escape asks before discarding annotations added after send", async () => {
+  const pending = [];
+  const harness = setupContentHarness({
+    confirmResult: false,
+    onSendMessage(message, callback) {
+      pending.push({ message, callback });
+    },
+  });
+
+  try {
+    await harness.toggleAnnotation();
+
+    const sendButton = harness.document.querySelector("button[data-action='send']");
+    const toast = harness.document.querySelector("#rl-toast");
+    assert.ok(sendButton);
+    assert.ok(toast);
+
+    sendButton.dispatchEvent(new harness.window.MouseEvent("click", { bubbles: true }));
+    assert.equal(pending.length, 1);
+    pending[0].callback({ success: true, path: "/tmp/mock.png" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    pill.textContent = "unsent after send";
+    pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+
+    dispatchKey(harness.document, harness.window, "Escape");
+
+    assert.deepEqual(harness.confirmCalls, ["Discard pending annotations and close Redline?"]);
+    assert.equal(toast.classList.contains("rl-visible"), true);
+    assert.ok(harness.document.querySelector("#rl-overlay"));
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 1);
   } finally {
     harness.cleanup();
   }
@@ -664,6 +720,7 @@ test("escape clears focused text-pill annotation before hiding app", async () =>
     assert.ok(harness.document.querySelector("#rl-overlay"));
 
     harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(harness.confirmCalls.length, 0);
     assert.equal(harness.document.querySelector("#rl-overlay"), null);
   } finally {
     harness.cleanup();
@@ -705,13 +762,127 @@ test("escape while editing a pill clears only the focused annotation", async () 
 });
 
 test("escape with no focused annotation hides app", async () => {
-  const harness = setupContentHarness();
+  const harness = setupContentHarness({ confirmResult: false });
 
   try {
     await harness.toggleAnnotation();
     assert.ok(harness.document.querySelector("#rl-overlay"));
 
     harness.document.dispatchEvent(new harness.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert.equal(harness.confirmCalls.length, 0);
+    assert.equal(harness.document.querySelector("#rl-overlay"), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("escape with pending annotations asks for confirmation before hiding app", async () => {
+  const harness = setupContentHarness({ confirmResult: false });
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    pill.textContent = "keep this";
+    pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+
+    const rectangleButton = harness.document.querySelector("button[data-action='tool-rectangle']");
+    assert.ok(rectangleButton);
+    rectangleButton.focus();
+
+    dispatchKey(harness.document, harness.window, "Escape");
+
+    assert.deepEqual(harness.confirmCalls, ["Discard pending annotations and close Redline?"]);
+    assert.ok(harness.document.querySelector("#rl-overlay"));
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 1);
+    assert.equal(harness.document.querySelectorAll(".rl-text-annotation").length, 1);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("escape with pending annotations closes after confirmation", async () => {
+  const harness = setupContentHarness({ confirmResult: true });
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    pill.textContent = "ship it";
+    pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+
+    dispatchKey(harness.document, harness.window, "Escape");
+
+    assert.deepEqual(harness.confirmCalls, ["Discard pending annotations and close Redline?"]);
+    assert.equal(harness.document.querySelector("#rl-overlay"), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("extension toggle keeps pending annotations when discard is canceled", async () => {
+  const harness = setupContentHarness({ confirmResult: false });
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    pill.textContent = "pending";
+    pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+
+    const response = await harness.toggleAnnotation();
+
+    assert.deepEqual(harness.confirmCalls, ["Discard pending annotations and close Redline?"]);
+    assert.deepEqual(response, { active: true });
+    assert.ok(harness.document.querySelector("#rl-overlay"));
+    assert.equal(harness.document.querySelectorAll(".rl-rect-annotation").length, 1);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("extension toggle closes pending annotations after confirmation", async () => {
+  const harness = setupContentHarness({ confirmResult: true });
+
+  try {
+    await harness.toggleAnnotation();
+    const overlay = harness.document.querySelector("#rl-overlay");
+    assert.ok(overlay);
+
+    dispatchMouse(overlay, harness.window, "mousedown", 20, 20, { button: 0 });
+    dispatchMouse(overlay, harness.window, "mousemove", 100, 70);
+    dispatchMouse(overlay, harness.window, "mouseup", 100, 70);
+
+    const pill = harness.document.querySelector(".rl-text-pill");
+    assert.ok(pill);
+    pill.textContent = "pending";
+    pill.dispatchEvent(new harness.window.FocusEvent("blur", { bubbles: true }));
+
+    const response = await harness.toggleAnnotation();
+
+    assert.deepEqual(harness.confirmCalls, ["Discard pending annotations and close Redline?"]);
+    assert.deepEqual(response, { active: false });
     assert.equal(harness.document.querySelector("#rl-overlay"), null);
   } finally {
     harness.cleanup();
